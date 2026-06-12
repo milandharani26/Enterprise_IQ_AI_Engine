@@ -9,7 +9,6 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 
-
 from shared.logging import setup as setup_logging
 from engine.shared.config import get_settings
 from engine.shared.exceptions.exceptions import GlobalExceptionHandler, AppException
