@@ -4,8 +4,8 @@ from typing import List
 from uuid import UUID
 from datetime import datetime, timezone
 
-from engine.modules.service_account.models.user import User
-from engine.modules.service_account.schemas.service_account_schema import ServiceAccountCreate, ServiceAccountResponse, ServiceAccountRegenerate
+from engine.modules.auth.models.user import User
+from engine.modules.service_account.service_account_schema import ServiceAccountCreate, ServiceAccountResponse, ServiceAccountRegenerate
 from engine.shared.security.jwt_token import create_service_account_token, get_token_expiration, hash_token
 from engine.shared.exceptions.service_exceptions import ExecutionError, EntityNotFoundError
 

@@ -5,8 +5,8 @@ from uuid import UUID
 
 from engine.shared.core.deps import get_db
 from engine.shared.core.middleware import require_admin
-from engine.modules.service_account.schemas.service_account_schema import ServiceAccountCreate, ServiceAccountResponse, ServiceAccountRegenerate
-from engine.modules.service_account.services.service_account_service import ServiceAccountService
+from engine.modules.service_account.service_account_schema import ServiceAccountCreate, ServiceAccountResponse, ServiceAccountRegenerate
+from engine.modules.service_account.service_account_service import ServiceAccountService
 from engine.shared.schemas.common import ErrorResponse
 from engine.modules.auth.models.user import User
 
