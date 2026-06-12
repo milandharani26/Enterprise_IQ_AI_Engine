@@ -15,7 +15,7 @@ router = APIRouter(tags=["Service Accounts"])
 def get_service_account_service(session: AsyncSession = Depends(get_db)) -> ServiceAccountService:
     return ServiceAccountService(session=session)
 
-@router.post("/", response_model=ServiceAccountResponse, status_code=status.HTTP_201_CREATED, responses={400: {"model": ErrorResponse}})
+@router.post("", response_model=ServiceAccountResponse, status_code=status.HTTP_201_CREATED, responses={400: {"model": ErrorResponse}})
 async def create_new_service_account(
     data: ServiceAccountCreate, 
     service: ServiceAccountService = Depends(get_service_account_service),
@@ -25,9 +25,10 @@ async def create_new_service_account(
     Create a new service account with the specified expiration time.
     Returns the created account and a newly generated JWT token.
     """
+    data.created_by = current_user.id
     return await service.create_service_account(data=data)
 
-@router.get("/", response_model=List[ServiceAccountResponse])
+@router.get("", response_model=List[ServiceAccountResponse])
 async def list_all_service_accounts(
     service: ServiceAccountService = Depends(get_service_account_service),
     current_user: User = Depends(require_admin)

@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
+import { useAssistantsHooks, Assistant } from '@/hooks/api/useAssistants';
+import toast from 'react-hot-toast';
 
 const MOCK_ASSISTANTS = [
   {
@@ -57,6 +59,37 @@ const MOCK_ASSISTANTS = [
 
 export default function AssistantsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { useAssistantsQuery, useCreateAssistantMutation } = useAssistantsHooks();
+  
+  const { data: assistants = [], isLoading } = useAssistantsQuery();
+  const createMutation = useCreateAssistantMutation();
+
+  // Form State
+  const [formData, setFormData] = useState({
+    assistant_name: '',
+    type: 'simple_reactive',
+    description: '',
+  });
+
+  const handleCreate = () => {
+    createMutation.mutate({
+      assistant_name: formData.assistant_name,
+      assistant_code: formData.assistant_name.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+      type: formData.type,
+      description: formData.description,
+      status: 'enabled'
+    }, {
+      onSuccess: () => {
+        setIsModalOpen(false);
+        setFormData({ assistant_name: '', type: 'simple_reactive', description: '' });
+        toast.success('Assistant created successfully!');
+      },
+      onError: (error: any) => {
+        const msg = error?.response?.data?.message || 'Failed to create assistant.';
+        toast.error(msg);
+      }
+    });
+  };
 
   return (
     <div className="flex flex-col gap-8 h-full">
@@ -96,11 +129,19 @@ export default function AssistantsPage() {
       </div>
 
       {/* Grid */}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
-        {MOCK_ASSISTANTS.map((assistant) => (
-          <AssistantCard key={assistant.id} assistant={assistant} />
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center p-10">Loading assistants...</div>
+      ) : (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
+          {assistants.length > 0 ? assistants.map((assistant, idx) => (
+            <AssistantCard key={assistant.id || idx} assistant={assistant} />
+          )) : (
+            <div className="col-span-full text-center text-muted-text p-10">
+              No assistants found. Create one!
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Create Assistant Modal */}
       <Modal
@@ -111,33 +152,39 @@ export default function AssistantsPage() {
         maxWidth="max-w-4xl"
       >
         <form className="flex flex-col gap-5">
-          <Input
-            label="Name *"
-            placeholder="e.g., Support Assistant"
+          <Input 
+            label="Assistant Name" 
+            placeholder="e.g. Customer Support" 
+            value={formData.assistant_name}
+            onChange={(e) => setFormData({ ...formData, assistant_name: e.target.value })}
             autoFocus
           />
           <Input
-            label="Code *"
-            placeholder="e.g., support_assistant"
+            label="Model *"
+            placeholder="e.g., gpt-4"
+            value={formData.type}
+            onChange={(e) => setFormData({ ...formData, type: e.target.value })}
           />
-          <p className="-mt-3 text-xs text-muted-text">Unique identifier — letters, numbers, and underscores only. Cannot be changed later.</p>
+          <p className="-mt-3 text-xs text-muted-text">The underlying AI model to use.</p>
 
           <Textarea
             label="Description"
             placeholder="What does this assistant do?"
-          />
-
-          <Input
-            label="Category"
-            placeholder="e.g., support, sales, internal"
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           />
 
           <div className="flex items-center justify-end gap-3 mt-4 pt-4 border-t border-border-color">
             <Button variant="ghost" type="button" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" type="button" onClick={() => setIsModalOpen(false)}>
-              Create Assistant
+            <Button 
+              variant="primary" 
+              type="button" 
+              onClick={handleCreate}
+              disabled={createMutation.isPending || !formData.assistant_name || !formData.type}
+            >
+              {createMutation.isPending ? 'Creating...' : 'Create Assistant'}
             </Button>
           </div>
         </form>
@@ -148,9 +195,9 @@ export default function AssistantsPage() {
 
 import Link from 'next/link';
 
-function AssistantCard({ assistant }: { assistant: typeof MOCK_ASSISTANTS[0] }) {
+function AssistantCard({ assistant }: { assistant: Assistant }) {
   return (
-    <Link href={`/assistants/${assistant.id}`} className="group relative flex flex-col bg-card-bg border border-border-color rounded-2xl p-6 transition-all duration-300 hover:border-border-hover hover:shadow-xl hover:shadow-black/5 hover:-translate-y-1 outline-none focus-visible:ring-2 focus-visible:ring-accent-primary">
+    <Link href={`/assistants/detail?id=${assistant.assistant_id}`} className="group relative flex flex-col bg-card-bg border border-border-color rounded-2xl p-6 transition-all duration-300 hover:border-border-hover hover:shadow-xl hover:shadow-black/5 hover:-translate-y-1 outline-none focus-visible:ring-2 focus-visible:ring-accent-primary">
       {/* Top row: Icon & Status */}
       <div className="flex justify-between items-start mb-4">
         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-primary/20 to-accent-secondary/20 flex items-center justify-center text-accent-primary border border-accent-primary/10">
@@ -178,40 +225,22 @@ function AssistantCard({ assistant }: { assistant: typeof MOCK_ASSISTANTS[0] }) 
       {/* Title & Description */}
       <div className="mb-6 flex-1">
         <h3 className="m-0 text-lg font-bold text-primary-text tracking-tight group-hover:text-accent-primary transition-colors">
-          {assistant.name}
+          {assistant.assistant_name}
         </h3>
-        <p className="m-0 mt-1 text-xs font-mono text-muted-text uppercase tracking-wider">{assistant.code}</p>
+        <p className="m-0 mt-1 text-xs font-mono text-muted-text uppercase tracking-wider">{assistant.type}</p>
         <p className="m-0 mt-3 text-sm text-secondary-text leading-relaxed line-clamp-2">
-          {assistant.description}
+          {assistant.description || 'No description provided.'}
         </p>
-      </div>
-
-      {/* Tags */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {assistant.tags.map(tag => (
-          <Badge key={tag} variant="default" size="sm">#{tag}</Badge>
-        ))}
       </div>
 
       {/* Bottom Stats & Actions */}
       <div className="pt-5 border-t border-border-color flex items-center justify-between">
-        <div className="flex items-center gap-4 text-xs font-medium text-muted-text">
-          <div className="flex items-center gap-1.5" title="API Calls">
-            <Activity size={14} />
-            {assistant.calls}
-          </div>
-          <div className="flex items-center gap-1.5" title="Connected Tools">
-            <Settings2 size={14} />
-            {assistant.tools}
-          </div>
-        </div>
         <Button 
           variant="secondary" 
           size="sm" 
           className="gap-2 text-xs h-8 px-3 rounded-lg border-transparent bg-tertiary-bg hover:bg-accent-primary hover:text-white transition-all group-hover:bg-accent-primary group-hover:text-white"
           onClick={(e) => {
             e.preventDefault();
-            // Optional: navigate to playground directly
           }}
         >
           <PlayCircle size={14} />

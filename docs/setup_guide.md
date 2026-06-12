@@ -16,7 +16,6 @@ The application is split into two primary pieces governed by a single monolithic
 > [!IMPORTANT]
 > The backend acts as a path dependency in Poetry. This means you run `poetry install` at the **root** of the project, not inside the `engine` directory.
 
----
 
 ## 2. Step-by-Step Scaffolding Commands
 
