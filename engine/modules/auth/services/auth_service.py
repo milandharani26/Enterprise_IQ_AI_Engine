@@ -9,7 +9,7 @@ jwt_service = JWTService()
 
 class AuthService:
     def __init__(self, db: AsyncSession):
-        self.db = db
+        self.db = db    
 
     async def authenticate_user(self, data: LoginRequest) -> tuple[str, str]:
         # 1. Find admin user
