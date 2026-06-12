@@ -9,20 +9,19 @@ class JWTService:
     def __init__(self):
         self.secret = settings.JWT_SECRET
         self.algorithm = settings.JWT_ALGORITHM
-        # Overriding with spec values as fallback if not in settings or enforcing them
-        self.expiry = getattr(settings, "ACCESS_TOKEN_EXPIRE_MIN", 15)
-        self.refresh_expiry_days = getattr(settings, "REFRESH_TOKEN_EXPIRE_DAYS", 30)
+        self.expiry = settings.ACCESS_TOKEN_EXPIRE_MIN
+        self.refresh_expiry = settings.REFRESH_TOKEN_EXPIRE_MIN
 
 
     def create_refresh_token(self, data: dict) -> str:
-        """Generate a refresh token with 30 days expiry."""
+        """Generate a refresh token with 30 min expiry."""
         payload = data.copy()
         now = datetime.now(timezone.utc)
-        expire = now + timedelta(days=self.refresh_expiry_days)
+        expire = now + timedelta(minutes=self.refresh_expiry)
         payload.update({
             "exp": expire,
             "iat": now,
-            "token_type": "refresh"
+            "type": "refresh"
         })
         return jwt.encode(payload, self.secret, algorithm=self.algorithm)
 
@@ -59,37 +58,10 @@ class JWTService:
         payload.update({
             "exp": expire,
             "iat": now,
-            "token_type": "access"
+            "type": "access"
         })
         token = jwt.encode(payload, self.secret, algorithm=self.algorithm)
         return token, expire
-
-    def set_auth_cookies(self, response: __import__('fastapi').Response, access_token: str, refresh_token: str):
-        """Attach access and refresh tokens to response cookies."""
-        # Access token cookie
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=True,     # True means HTTPS only, disable if testing locally without HTTPS
-            samesite="lax",
-            max_age=self.expiry * 60,  # Convert minutes to seconds
-        )
-        
-        # Refresh token cookie
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=self.refresh_expiry_days * 24 * 60 * 60,  # Convert days to seconds
-        )
-
-    def clear_auth_cookies(self, response: __import__('fastapi').Response):
-        """Clear auth cookies on logout."""
-        response.delete_cookie("access_token", httponly=True, secure=True, samesite="lax")
-        response.delete_cookie("refresh_token", httponly=True, secure=True, samesite="lax")
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:

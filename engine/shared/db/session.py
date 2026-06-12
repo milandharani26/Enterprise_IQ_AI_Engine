@@ -39,15 +39,3 @@ sync_engine = create_engine(
     pool_recycle=1800,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=sync_engine, class_=Session)
-
-# Check database connection on initialization
-from sqlalchemy import text
-import sys
-
-try:
-    with sync_engine.connect() as conn:
-        res = conn.execute(text('SELECT 1'))
-        if res.fetchone():
-            print("Database Connected Successfully!")
-except Exception as e:
-    print(f"Failed to connect to the database: {e}")

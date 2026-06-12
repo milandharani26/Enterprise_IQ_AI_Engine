@@ -9,18 +9,6 @@ from alembic import context
 # access to the values within the .ini file in use.
 config = context.config
 
-import os
-import sys
-
-# Add project root to path to allow importing engine config
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-from engine.shared.db.session import sync_engine
-
-# Use the exact same sync URL already configured in session.py
-escaped_url = sync_engine.url.render_as_string(hide_password=False).replace('%', '%%')
-config.set_main_option("sqlalchemy.url", escaped_url)
-
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
@@ -69,7 +57,11 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = sync_engine
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
 
     with connectable.connect() as connection:
         context.configure(

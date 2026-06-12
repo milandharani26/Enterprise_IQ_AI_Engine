@@ -17,14 +17,10 @@ dependencies = [
     "python-jose[cryptography] (>=3.5.0,<4.0.0)",
     "loguru (>=0.7.3,<0.8.0)",
     "psycopg2-binary (>=2.9.12,<3.0.0)",
-    "httpx (>=0.28.1,<0.29.0)",
-    "bcrypt (>=5.0.0,<6.0.0)"
+    "httpx (>=0.28.1,<0.29.0)"
 ]
 
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.poetry]
-package-mode = false

@@ -36,7 +36,7 @@ async def get_current_user(
     token: str = Depends(auth_scheme)
 ):
     # Delayed import to avoid circular import
-    from engine.modules.auth.models.user import User
+    from engine.shared.models.users_model import User
     """Validate token and return current user."""
     # AuthMiddleware already validates bearer tokens and attaches a user.
     # Reuse it to avoid duplicate DB lookups on every request.
@@ -92,7 +92,7 @@ async def get_current_user(
         )
 
     try:
-        query = select(User).where(User.id == user_id)
+        query = select(User).where(User.admin_id == user_id)
         result = await db.execute(query)
         user = result.scalars().first()
     except Exception as e:
@@ -111,8 +111,7 @@ async def get_current_user(
         )
  
     # Validation Checks
-    # Validation Checks
-    if not user.is_active:
+    if user.status != "active":
         raise HTTPException(
             status_code=403,
             detail="Account is disabled",
@@ -120,10 +119,9 @@ async def get_current_user(
 
     # Expiry check (DB-level) – apply only to interactive users.
     # Service accounts rely on JWT expiry + token_hash rotation instead.
-    expires_at = getattr(user, "expires_at", None)
-    if user.account_type != "service_account" and expires_at:
+    if user.account_type != "service_account" and user.expires_at:
         now = datetime.utcnow()
-        if expires_at < now:
+        if user.expires_at < now:
             raise HTTPException(
                 status_code=423,
                 detail="Your session has expired. Please login again",
@@ -142,7 +140,7 @@ async def get_current_user(
 
 async def get_current_admin(current_user = Depends(get_current_user)):
     # Delayed import to avoid circular import
-    from engine.modules.auth.models.user import User
+    from engine.shared.models.users_model import User
     """Ensure the current user is an admin (interactive account)."""
     # if current_user.account_type != "interactive":
     #     raise HTTPException(
@@ -156,7 +154,7 @@ async def get_base_deps(
     current_user = Depends(get_current_user),
 ):
     # Delayed import to avoid circular import
-    from engine.modules.auth.models.user import User
+    from engine.shared.models.users_model import User
     """Inject common dependencies with type safety (reusable across domains)."""
     return BaseDeps(
         db=db,
