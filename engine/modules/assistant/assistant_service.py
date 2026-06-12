@@ -57,7 +57,7 @@ class AssistantService:
 
     @staticmethod
     async def update_assistant(
-        db: AsyncSession, assistant_id: UUID, obj_in: AssistantUpdate, user_id: UUID
+        db: AsyncSession, assistant_id: UUID, obj_in: AssistantCreate, user_id: UUID
     ) -> Assistant:
         assistant = await AssistantService.get_assistant(db, assistant_id)
         
