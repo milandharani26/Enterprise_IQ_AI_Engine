@@ -48,10 +48,10 @@ async def get_assistant(
     """Get assistant details."""
     return await AssistantService.get_assistant(db=db, assistant_id=assistant_id)
 
-@router.patch("/{assistant_id}", response_model=AssistantResponse)
+@router.put("/{assistant_id}", response_model=AssistantResponse)
 async def update_assistant(
     assistant_id: UUID,
-    assistant_in: AssistantUpdate,
+    assistant_in: AssistantCreate,
     current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):

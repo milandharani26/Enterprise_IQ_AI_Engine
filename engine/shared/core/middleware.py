@@ -3,7 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from engine.shared.core.deps import get_db
 from engine.shared.core.security import JWTService
-from engine.modules.auth.auth_models import User
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from engine.modules.auth.auth_models import User
 
 
 class AuthMiddleware:
@@ -47,11 +49,12 @@ class AuthMiddleware:
         self,
         request: Request,
         db: AsyncSession = Depends(get_db),
-    ) -> User:
+    ) -> "User":
         """
         Validate the ``access_token`` cookie and return the matching User.
         Raises 401 if the token is missing/invalid, 403 if the account is disabled.
         """
+        from engine.modules.auth.auth_models import User
         token = request.cookies.get("access_token")
         if not token:
             raise self._auth_error("Missing access token cookie")
@@ -87,7 +90,7 @@ class AuthMiddleware:
         self,
         request: Request,
         db: AsyncSession = Depends(get_db),
-    ) -> User:
+    ) -> "User":
         """
         Resolve the current user (via ``get_current_user``) and assert
         that ``account_type == 'admin'``. Raises 403 otherwise.
@@ -108,12 +111,13 @@ class AuthMiddleware:
         self,
         x_api_key: str = Header(None, alias="X-API-Key"),
         db: AsyncSession = Depends(get_db),
-    ) -> User:
+    ) -> "User":
         """
         Validate the ``X-API-Key`` header as a JWT, verify the user is an
         active service account, and confirm the token matches the stored
         ``service_token`` (revocation check).
         """
+        from engine.modules.auth.auth_models import User
         if not x_api_key:
             raise self._auth_error("Missing X-API-Key header")
 
