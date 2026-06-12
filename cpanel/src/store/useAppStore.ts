@@ -1,8 +1,17 @@
 import { create } from 'zustand';
 
+export interface User {
+  id?: string;
+  email: string;
+  role?: string;
+  is_active?: boolean;
+}
+
 interface AppState {
-  user: { name: string; email: string } | null;
-  setUser: (user: { name: string; email: string } | null) => void;
+  user: User | null;
+  isAuthenticated: boolean;
+  setUser: (user: User | null) => void;
+  logout: () => void;
   
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
@@ -12,7 +21,9 @@ interface AppState {
 export const useAppStore = create<AppState>((set) => ({
   // User State
   user: null,
-  setUser: (user) => set({ user }),
+  isAuthenticated: false,
+  setUser: (user) => set({ user, isAuthenticated: !!user }),
+  logout: () => set({ user: null, isAuthenticated: false }),
 
   // UI State
   isSidebarOpen: true,

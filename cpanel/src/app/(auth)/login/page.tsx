@@ -1,11 +1,39 @@
-import React from 'react';
-import Link from 'next/link';
+"use client";
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bot } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { useAuthHooks } from '@/hooks/api/useAuth';
+import toast from 'react-hot-toast';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  
+  const { useLoginMutation } = useAuthHooks();
+  const loginMutation = useLoginMutation();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    loginMutation.mutate(
+      { email, password },
+      {
+        onSuccess: () => {
+          toast.success('Successfully logged in!');
+          router.push('/dashboard');
+        },
+        onError: (error: any) => {
+          const msg = error?.response?.data?.message || 'Login failed. Please check your credentials.';
+          toast.error(msg);
+        }
+      }
+    );
+  };
+
   return (
     <Card className="w-full max-w-[400px] bg-card-bg border-border-color shadow-xl rounded-2xl overflow-hidden" padding="lg">
       <CardHeader className="text-center mb-8">
@@ -21,12 +49,15 @@ export default function LoginPage() {
       </CardHeader>
       
       <CardContent>
-        <form className="flex flex-col gap-5">
+        <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
           <Input 
             label="Work Email"
             type="email" 
             placeholder="name@company.com" 
             autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
           />
           
           <div>
@@ -35,12 +66,22 @@ export default function LoginPage() {
               type="password" 
               placeholder="••••••••" 
               autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
             />
           </div>
           
           <div className="mt-4">
-            <Button type="button" fullWidth variant="primary" size="lg" className="shadow-lg shadow-accent-primary/20 rounded-xl">
-              Login
+            <Button 
+              type="submit" 
+              fullWidth 
+              variant="primary" 
+              size="lg" 
+              className="shadow-lg shadow-accent-primary/20 rounded-xl"
+              disabled={loginMutation.isPending}
+            >
+              {loginMutation.isPending ? 'Logging in...' : 'Login'}
             </Button>
           </div>
         </form>

@@ -1,69 +1,102 @@
 "use client";
 
 import React, { useState } from 'react';
-import { KeyRound, Copy, Plus, ShieldCheck, MoreVertical, CheckCircle2, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { KeyRound, Copy, Plus, ShieldCheck, MoreVertical, CheckCircle2, ShieldAlert, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
-
-interface Token {
-  id: string;
-  name: string;
-  prefix: string;
-  created: string;
-  expires: string;
-  status: 'active' | 'revoked';
-}
-
-const INITIAL_TOKENS: Token[] = [
-  {
-    id: 'tok_1',
-    name: 'Production Worker',
-    prefix: 'sk_live_...j9k8',
-    created: 'Jun 12, 2026',
-    expires: 'Never',
-    status: 'active',
-  },
-  {
-    id: 'tok_2',
-    name: 'Staging Environment',
-    prefix: 'sk_test_...m2n1',
-    created: 'May 01, 2026',
-    expires: 'Nov 12, 2026',
-    status: 'active',
-  }
-];
+import { useServiceAccountsHooks } from '@/hooks/api/useServiceAccounts';
+import toast from 'react-hot-toast';
 
 export default function ServiceTokenPage() {
-  const [tokens, setTokens] = useState<Token[]>(INITIAL_TOKENS);
+  const { 
+    useServiceAccountsQuery, 
+    useCreateServiceAccountMutation, 
+    useRevokeServiceAccountMutation,
+    useRegenerateServiceAccountMutation
+  } = useServiceAccountsHooks();
+
+  const { data: accounts = [], isLoading } = useServiceAccountsQuery();
+  const createMutation = useCreateServiceAccountMutation();
+  const revokeMutation = useRevokeServiceAccountMutation();
+  const regenerateMutation = useRegenerateServiceAccountMutation();
+
   const [filter, setFilter] = useState<'all' | 'active' | 'revoked'>('all');
   
   // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [tokenToRevoke, setTokenToRevoke] = useState<string | null>(null);
+  const [tokenToRegenerate, setTokenToRegenerate] = useState<string | null>(null);
   const [newTokenName, setNewTokenName] = useState('');
+  const [newTokenNote, setNewTokenNote] = useState('');
+  const [newTokenExpiry, setNewTokenExpiry] = useState('');
+  
   const [generatedToken, setGeneratedToken] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
+
+  // Map API data to UI structure
+  const tokens = Array.isArray(accounts) ? accounts.map(acc => ({
+    id: acc.id,
+    name: acc.name,
+    prefix: 'sk_live_...xxxx', // Backend does not store prefix, using placeholder
+    created: acc.created_at ? new Date(acc.created_at).toLocaleDateString() : 'Unknown',
+    expires: acc.expires_at ? new Date(acc.expires_at).toLocaleDateString() : 'Never',
+    status: acc.is_active ? 'active' : 'revoked'
+  })) : [];
 
   const filteredTokens = tokens.filter(t => filter === 'all' || t.status === filter);
 
   const handleGenerate = () => {
     if (!newTokenName.trim()) return;
-    const fullToken = `sk_live_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
-    const prefix = `sk_live_...${fullToken.slice(-4)}`;
     
-    const newToken: Token = {
-      id: `tok_${Date.now()}`,
-      name: newTokenName,
-      prefix,
-      created: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      expires: 'Never',
-      status: 'active'
-    };
+    let expireAt = new Date();
+    if (newTokenExpiry) {
+      expireAt = new Date(newTokenExpiry);
+    } else {
+      expireAt.setFullYear(expireAt.getFullYear() + 1); // Default to 1 year
+    }
 
-    setTokens([newToken, ...tokens]);
-    setGeneratedToken(fullToken);
+    createMutation.mutate({
+      name: newTokenName,
+      description: newTokenNote,
+      expires_at: expireAt.toISOString(),
+      is_active: true
+    }, {
+      onSuccess: (data: any) => {
+        toast.success('Token created successfully!');
+        if (data.token) {
+          setGeneratedToken(data.token);
+        }
+      },
+      onError: (error: any) => {
+        toast.error(error?.response?.data?.message || 'Failed to create token');
+      }
+    });
+  };
+
+  const confirmRevoke = (id: string) => {
+    revokeMutation.mutate(id, {
+      onSuccess: () => {
+        toast.success('Token revoked.');
+        setTokenToRevoke(null);
+      },
+      onError: () => toast.error('Failed to revoke token.')
+    });
+  };
+
+  const confirmRegenerate = (id: string) => {
+    regenerateMutation.mutate({ accountId: id }, {
+      onSuccess: (data: any) => {
+        toast.success('Token regenerated successfully!');
+        if (data.token) {
+          setGeneratedToken(data.token);
+          setIsCreateModalOpen(true);
+        }
+        setTokenToRegenerate(null);
+      },
+      onError: () => toast.error('Failed to regenerate token.')
+    });
   };
 
   const handleCopy = () => {
@@ -78,6 +111,8 @@ export default function ServiceTokenPage() {
     setIsCreateModalOpen(false);
     setTimeout(() => {
       setNewTokenName('');
+      setNewTokenNote('');
+      setNewTokenExpiry('');
       setGeneratedToken(null);
       setIsCopied(false);
     }, 300);
@@ -154,7 +189,11 @@ export default function ServiceTokenPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredTokens.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={5} className="py-16 px-6 text-center text-muted-text">Loading tokens...</td>
+                </tr>
+              ) : filteredTokens.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-16 px-6 text-center">
                     <div className="flex flex-col items-center justify-center text-muted-text">
@@ -201,9 +240,16 @@ export default function ServiceTokenPage() {
                       )}
                     </td>
                     <td className="py-5 px-6 text-right">
-                      <button className="p-2 text-muted-text hover:text-primary-text rounded-lg hover:bg-tertiary-bg opacity-0 group-hover:opacity-100 transition-all focus:opacity-100 outline-none">
-                        <MoreVertical size={20} />
-                      </button>
+                      {token.status === 'active' && (
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => setTokenToRegenerate(token.id)} className="p-2 text-muted-text hover:text-accent-primary rounded-lg hover:bg-accent-primary/10 transition-all outline-none" title="Regenerate Token">
+                            <RefreshCw size={18} />
+                          </button>
+                          <button onClick={() => setTokenToRevoke(token.id)} className="p-2 text-muted-text hover:text-accent-danger rounded-lg hover:bg-accent-danger/10 transition-all outline-none" title="Revoke Token">
+                            <ShieldAlert size={18} />
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -241,8 +287,10 @@ export default function ServiceTokenPage() {
               <Input 
                 type="datetime-local"
                 placeholder="dd-mm-yyyy --:--"
+                value={newTokenExpiry}
+                onChange={(e) => setNewTokenExpiry(e.target.value)}
               />
-              <p className="text-xs text-secondary-text mt-2 m-0">Leave empty for a non-expiring token (active until revoked).</p>
+              <p className="text-xs text-secondary-text mt-2 m-0">Leave empty for a 1-year expiration by default.</p>
             </div>
 
             <div>
@@ -250,12 +298,14 @@ export default function ServiceTokenPage() {
               <Textarea 
                 placeholder="e.g. Used by the analytics pipeline for GPT access."
                 rows={3}
+                value={newTokenNote}
+                onChange={(e) => setNewTokenNote(e.target.value)}
               />
             </div>
             <div className="flex justify-end gap-3 mt-4 pt-5 border-t border-border-color">
               <Button variant="ghost" type="button" onClick={handleCloseModal}>Cancel</Button>
-              <Button variant="primary" type="button" onClick={handleGenerate} disabled={!newTokenName.trim()}>
-                Create Token
+              <Button variant="primary" type="button" onClick={handleGenerate} disabled={!newTokenName.trim() || createMutation.isPending}>
+                {createMutation.isPending ? 'Creating...' : 'Create Token'}
               </Button>
             </div>
           </form>
@@ -291,6 +341,38 @@ export default function ServiceTokenPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Revoke Confirmation Modal */}
+      <Modal
+        isOpen={!!tokenToRevoke}
+        onClose={() => setTokenToRevoke(null)}
+        title="Revoke Token"
+        description="Are you sure you want to revoke this token? This action cannot be undone and any integrations using this token will immediately lose access."
+        maxWidth="max-w-md"
+      >
+        <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-border-color">
+          <Button variant="ghost" onClick={() => setTokenToRevoke(null)}>Cancel</Button>
+          <Button variant="primary" className="bg-accent-danger hover:bg-accent-danger/90 text-white border-transparent" onClick={() => tokenToRevoke && confirmRevoke(tokenToRevoke)} disabled={revokeMutation.isPending}>
+            {revokeMutation.isPending ? 'Revoking...' : 'Yes, Revoke Token'}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Regenerate Confirmation Modal */}
+      <Modal
+        isOpen={!!tokenToRegenerate}
+        onClose={() => setTokenToRegenerate(null)}
+        title="Regenerate Token"
+        description="Regenerating the token will immediately invalidate the old token. Any integrations using the old token will break until updated. Do you want to proceed?"
+        maxWidth="max-w-md"
+      >
+        <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-border-color">
+          <Button variant="ghost" onClick={() => setTokenToRegenerate(null)}>Cancel</Button>
+          <Button variant="primary" onClick={() => tokenToRegenerate && confirmRegenerate(tokenToRegenerate)} disabled={regenerateMutation.isPending}>
+            {regenerateMutation.isPending ? 'Regenerating...' : 'Yes, Regenerate'}
+          </Button>
+        </div>
       </Modal>
     </div>
   );

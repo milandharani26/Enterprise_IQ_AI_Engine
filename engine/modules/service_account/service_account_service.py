@@ -20,7 +20,9 @@ class ServiceAccountService:
                 user_name=data.name,
                 account_type="service_account",
                 is_active=True,
-                created_by=data.created_by
+                created_by=data.created_by,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
             )
             
             self.session.add(new_user)
