@@ -43,6 +43,7 @@ class Settings(BaseSettings):
 
     # JWT/Auth
     jwt_secret: str = Field(default="dev-secret-do-not-use-in-production", alias="JWT_SECRET")
+    service_token_secret_key: str = Field(default="dev-service-token-secret-key", alias="SERVICE_TOKEN_SECRET_KEY")
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     access_token_expire_min: int = Field(default=15, alias="ACCESS_TOKEN_EXPIRE_MIN")
     refresh_token_expire_min: int = Field(default=30, alias="REFRESH_TOKEN_EXPIRE_MIN")

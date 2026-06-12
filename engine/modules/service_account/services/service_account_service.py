@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from engine.modules.service_account.models.user import User
 from engine.modules.service_account.schemas.service_account_schema import ServiceAccountCreate, ServiceAccountResponse, ServiceAccountRegenerate
-from engine.shared.security.jwt_token import create_service_account_token, get_token_expiration
+from engine.shared.security.jwt_token import create_service_account_token, get_token_expiration, hash_token
 from engine.shared.exceptions.service_exceptions import ExecutionError, EntityNotFoundError
 
 class ServiceAccountService:
@@ -20,7 +20,7 @@ class ServiceAccountService:
                 user_name=data.name,
                 account_type="service_account",
                 is_active=True,
-                email=data.note if data.note else None
+                created_by=data.created_by
             )
             
             self.session.add(new_user)
@@ -29,8 +29,8 @@ class ServiceAccountService:
             # Generate token with exact expire_at and the user's generated ID
             token = create_service_account_token(user_id=str(new_user.id), user_name=data.name, expire_at=data.expire_at)
             
-            # Update the user with the token
-            new_user.service_token = token
+            # Update the user with the hashed token
+            new_user.service_token = hash_token(token)
             
             await self.session.commit()
             await self.session.refresh(new_user)
@@ -38,10 +38,10 @@ class ServiceAccountService:
             return ServiceAccountResponse(
                 id=new_user.id,
                 name=new_user.user_name,
-                note=new_user.email,
                 expire_at=data.expire_at,
                 is_active=new_user.is_active,
-                token=token
+                token=token,
+                created_by=new_user.created_by
             )
         except Exception as e:
             await self.session.rollback()
@@ -53,14 +53,15 @@ class ServiceAccountService:
         
         accounts = []
         for user in users:
-            exp = get_token_expiration(user.service_token) if user.service_token else datetime.now(timezone.utc)
+            # Cannot extract expiration from hashed token, defaulting to current time
+            exp = datetime.now(timezone.utc)
             accounts.append(ServiceAccountResponse(
                 id=user.id,
                 name=user.user_name,
-                note=user.email,
                 expire_at=exp,
                 is_active=user.is_active,
-                token=user.service_token
+                token=None, # Do not return hashed token
+                created_by=user.created_by
             ))
         return accounts
 
@@ -82,18 +83,20 @@ class ServiceAccountService:
         if data.expire_at:
             new_exp = data.expire_at
         else:
-            new_exp = get_token_expiration(user.service_token) if user.service_token else datetime.now(timezone.utc)
+            # Cannot extract expiration from hashed token, defaulting to current time + 1 year
+            from datetime import timedelta
+            new_exp = datetime.now(timezone.utc) + timedelta(days=365)
             
         new_token = create_service_account_token(user_id=str(user.id), user_name=user.user_name, expire_at=new_exp)
         
-        user.service_token = new_token
+        user.service_token = hash_token(new_token)
         await self.session.commit()
         
         return ServiceAccountResponse(
             id=user.id,
             name=user.user_name,
-            note=user.email,
             expire_at=new_exp,
             is_active=user.is_active,
-            token=new_token
+            token=new_token,
+            created_by=user.created_by
         )
