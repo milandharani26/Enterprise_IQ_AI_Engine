@@ -4,11 +4,11 @@ from typing import List
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from engine.shared.core.deps import get_db
-from engine.modules.auth.models.user import User
-from engine.modules.assistant.schemas.assistant_schema import (
+from engine.modules.auth.auth_models import User
+from engine.modules.assistant.assistant_schemas import (
     AssistantCreate, AssistantUpdate, AssistantResponse, AssistantStatusUpdate
 )
-from engine.modules.assistant.services.assistant_service import AssistantService
+from engine.modules.assistant.assistant_service import AssistantService
 
 router = APIRouter(prefix="/assistants", tags=["assistants"])
 

@@ -1,11 +1,13 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException, status
-from engine.modules.auth.models.user import User
-from engine.modules.auth.schemas.auth_schema import LoginRequest
+
+from engine.modules.auth.auth_models import User
+from engine.modules.auth.auth_schemas import LoginRequest
 from engine.shared.core.security import JWTService, PasswordHelper
 
 jwt_service = JWTService()
+
 
 class AuthService:
     def __init__(self, db: AsyncSession):
@@ -23,7 +25,7 @@ class AuthService:
         # 2. Verify password
         if not PasswordHelper.verify_password(data.password, user.password_hash):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-            
+
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User inactive")
 
@@ -63,17 +65,17 @@ class AuthService:
         # 3. Generate new access token
         access_payload = {"user_id": str(user.id), "account_type": user.account_type}
         access_token, _ = jwt_service.create_access_token(access_payload)
-        
-        # also rotate refresh token
+
+        # Also rotate refresh token
         refresh_payload = {"user_id": str(user.id)}
         new_refresh_token = jwt_service.create_refresh_token(refresh_payload)
         user.refresh_token = new_refresh_token
         await self.db.commit()
 
-        # 4. Return access token
+        # 4. Return tokens
         return access_token, new_refresh_token
 
     async def logout_user(self, user: User) -> None:
-        # 2. Remove refresh_token from database
+        # Remove refresh_token from database
         user.refresh_token = None
         await self.db.commit()

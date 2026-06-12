@@ -36,7 +36,7 @@ async def get_current_user(
     token: str = Depends(auth_scheme)
 ):
     # Delayed import to avoid circular import
-    from engine.modules.auth.models.user import User
+    from engine.modules.auth.auth_models import User
     """Validate token and return current user."""
     # AuthMiddleware already validates bearer tokens and attaches a user.
     # Reuse it to avoid duplicate DB lookups on every request.
@@ -142,7 +142,7 @@ async def get_current_user(
 
 async def get_current_admin(current_user = Depends(get_current_user)):
     # Delayed import to avoid circular import
-    from engine.modules.auth.models.user import User
+    from engine.modules.auth.auth_models import User
     """Ensure the current user is an admin (interactive account)."""
     # if current_user.account_type != "interactive":
     #     raise HTTPException(
@@ -156,7 +156,7 @@ async def get_base_deps(
     current_user = Depends(get_current_user),
 ):
     # Delayed import to avoid circular import
-    from engine.modules.auth.models.user import User
+    from engine.modules.auth.auth_models import User
     """Inject common dependencies with type safety (reusable across domains)."""
     return BaseDeps(
         db=db,

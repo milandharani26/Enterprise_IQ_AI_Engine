@@ -5,8 +5,8 @@ from uuid import UUID
 from datetime import datetime, timezone
 from fastapi import HTTPException, status
 
-from engine.modules.assistant.models.assistant import Assistant
-from engine.modules.assistant.schemas.assistant_schema import AssistantCreate, AssistantUpdate, AssistantStatusUpdate
+from engine.modules.assistant.assistant_models import Assistant
+from engine.modules.assistant.assistant_schemas import AssistantCreate, AssistantUpdate, AssistantStatusUpdate
 
 class AssistantService:
     @staticmethod
