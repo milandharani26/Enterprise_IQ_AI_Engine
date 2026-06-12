@@ -65,7 +65,7 @@ class AssistantService:
         for field, value in update_data.items():
             setattr(assistant, field, value)
             
-        assistant.updated_at = datetime.now(timezone.utc)
+        assistant.updated_at = datetime.utcnow()
         assistant.updated_by = user_id
         
         await db.commit()
@@ -76,9 +76,9 @@ class AssistantService:
     async def soft_delete_assistant(db: AsyncSession, assistant_id: UUID, user_id: UUID) -> Assistant:
         assistant = await AssistantService.get_assistant(db, assistant_id)
         
-        assistant.deleted_at = datetime.now(timezone.utc)
+        assistant.deleted_at = datetime.utcnow()
         assistant.deleted_by = user_id
-        assistant.updated_at = datetime.now(timezone.utc)
+        assistant.updated_at = datetime.utcnow()
         assistant.updated_by = user_id
         
         await db.commit()
@@ -91,7 +91,7 @@ class AssistantService:
         assistant = await AssistantService.get_assistant(db, assistant_id)
         
         assistant.status = obj_in.status
-        assistant.updated_at = datetime.now(timezone.utc)
+        assistant.updated_at = datetime.utcnow()
         assistant.updated_by = user_id
         
         await db.commit()

@@ -7,7 +7,7 @@ class ServiceAccountCreate(BaseModel):
     name: str
     note: Optional[str] = None
     expire_at: datetime
-    created_by: UUID
+    created_by: Optional[UUID] = None
 
 class ServiceAccountResponse(BaseModel):
     id: UUID
