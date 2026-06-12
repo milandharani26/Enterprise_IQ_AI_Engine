@@ -4,7 +4,7 @@ import sys
 
 def main():
     print("Starting backend...")
-    backend = subprocess.Popen([sys.executable, "-m", "uvicorn", "main:app", "--reload"])
+    backend = subprocess.Popen([sys.executable, "-m", "poetry", "run", "uvicorn", "main:app", "--reload"])
     
     print("Starting frontend...")
     os.chdir("cpanel")

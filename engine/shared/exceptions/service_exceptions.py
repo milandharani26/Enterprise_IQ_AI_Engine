@@ -103,3 +103,9 @@ class InvalidOperationError(BusinessLogicError):
     """Operation not allowed in current state."""
     error_code = "ERR_INVALID_OPERATION"
     message = "Operation not allowed"
+
+class ServiceAccountException(ServiceException):
+    """Base exception for service account."""
+    status_code = 400
+    error_code = "ERR_SERVICE_ACCOUNT"
+    message = "Service account error"
