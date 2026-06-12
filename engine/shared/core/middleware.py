@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from engine.shared.core.deps import get_db
 from engine.shared.core.security import JWTService
-from engine.modules.auth.models.user import User
+from engine.modules.auth.auth_models import User
 
 
 class AuthMiddleware:
