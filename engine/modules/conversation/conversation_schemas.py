@@ -54,8 +54,8 @@ class ConversationDetailResponseSchema(ConversationResponseSchema):
 
 class NewUserMessagePayloadSchema(BaseModel):
     """Payload sent by the frontend chat component when a user types a message."""
-    organization_id: UUID
     conversation_id: UUID
     user_id: UUID
+    organization_id: Optional[UUID] = None  # Optional so NestJS doesn't have to send it
     agent_id: Optional[UUID] = None
     content: str
