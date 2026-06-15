@@ -1,0 +1,46 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from engine.shared.core.deps import get_db
+from engine.modules.conversation.conversation_schemas import (
+    NewUserMessagePayloadSchema,
+    MessageResponseSchema,
+    ConversationDetailResponseSchema
+)
+from engine.modules.conversation.conversation_service import ConversationService
+from engine.modules.conversation.conversation_models import Conversation
+from uuid import UUID
+from typing import List
+
+router = APIRouter(
+    prefix="/conversations",
+    tags=["Conversations & Chat Logs"]
+)
+
+@router.post("/chat", response_model=MessageResponseSchema, status_code=status.HTTP_201_CREATED)
+async def process_chat_message(payload: NewUserMessagePayloadSchema, db: AsyncSession = Depends(get_db)):
+    """
+    Primary real-time chat execution hub.
+    Receives prompt text from your frontend, logs it as a USER message,
+    runs the AI core, logs the ASSISTANT response, and returns the AI reply.
+    """
+    service = ConversationService(db)
+    return await service.handle_chat_turn(payload)
+
+@router.get("/{conversation_id}/history", response_model=List[MessageResponseSchema])
+async def fetch_chat_history(conversation_id: UUID, db: AsyncSession = Depends(get_db)):
+    """Returns all message instances ordered by chronology for a given conversation session."""
+    service = ConversationService(db)
+    return await service.get_conversation_history(conversation_id)
+
+@router.get("/{conversation_id}", response_model=ConversationDetailResponseSchema)
+async def get_conversation_details(conversation_id: UUID, db: AsyncSession = Depends(get_db)):
+    """Fetches full conversational session tracking details alongside its historical records."""
+    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conversation = result.scalar_one_or_none()
+    if not conversation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation room trace missing"
+        )
+    return conversation
