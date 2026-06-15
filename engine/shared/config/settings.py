@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     secrets_encryption_key: str = Field(default="", alias="SECRETS_ENCRYPTION_KEY")
     password_secret: str = Field(default="iconflux", alias="PASSWORD_SECRET")
 
+    # Integrations
+    user_backend_url: str = Field(default="http://localhost:3000", alias="USER_BACKEND_URL")
+
     # JWT/Auth
     jwt_secret: str = Field(default="dev-secret-do-not-use-in-production", alias="JWT_SECRET")
     service_token_secret_key: str = Field(default="dev-service-token-secret-key", alias="SERVICE_TOKEN_SECRET_KEY")
