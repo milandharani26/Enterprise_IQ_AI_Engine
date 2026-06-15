@@ -4,9 +4,9 @@ import { apiClient } from '@/lib/api-client';
 export interface ServiceAccount {
   id: string;
   name: string;
-  description?: string;
+  note?: string;
   is_active: boolean;
-  expires_at?: string;
+  expire_at?: string;
   created_at?: string;
 }
 
@@ -47,7 +47,7 @@ export const useServiceAccountsHooks = () => {
   });
 
   const useRegenerateServiceAccountMutation = () => useMutation({
-    mutationFn: async ({ accountId, data }: { accountId: string; data?: { expires_at: string } }) => {
+    mutationFn: async ({ accountId, data }: { accountId: string; data?: { expire_at: string } }) => {
       const response = await apiClient.post<{ account: ServiceAccount; token: string }>(`/service-accounts/${accountId}/regenerate`, data || {});
       return response.data;
     },

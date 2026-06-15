@@ -96,7 +96,7 @@ export default function AssistantDetailsClient() {
 
   const handleToggleStatus = () => {
     const newStatus = assistant?.status === 'enabled' ? false : true;
-    statusMutation.mutate({ id, status_in: { is_active: newStatus } }, {
+    statusMutation.mutate({ id, status_in: { status: newStatus ? 'enabled' : 'disabled' } }, {
       onSuccess: () => toast.success(`Assistant ${newStatus ? 'enabled' : 'disabled'}.`),
       onError: () => toast.error('Failed to update status.')
     });

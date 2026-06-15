@@ -43,3 +43,15 @@ def hash_token(token: str) -> str:
     token_sha256 = hashlib.sha256(token.encode('utf-8')).hexdigest()
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(token_sha256.encode('utf-8'), salt).decode('utf-8')
+
+def verify_token_hash(plain_token: str, hashed_token: str) -> bool:
+    """
+    Verifies a plain token against its bcrypt hash.
+    """
+    if not hashed_token:
+        return False
+    token_sha256 = hashlib.sha256(plain_token.encode('utf-8')).hexdigest()
+    try:
+        return bcrypt.checkpw(token_sha256.encode('utf-8'), hashed_token.encode('utf-8'))
+    except ValueError:
+        return False
