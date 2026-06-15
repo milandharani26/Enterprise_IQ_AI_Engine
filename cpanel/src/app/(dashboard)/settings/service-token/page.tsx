@@ -41,7 +41,7 @@ export default function ServiceTokenPage() {
     name: acc.name,
     prefix: 'sk_live_...xxxx', // Backend does not store prefix, using placeholder
     created: acc.created_at ? new Date(acc.created_at).toLocaleDateString() : 'Unknown',
-    expires: acc.expires_at ? new Date(acc.expires_at).toLocaleDateString() : 'Never',
+    expires: acc.expire_at ? new Date(acc.expire_at).toLocaleDateString() : 'Never',
     status: acc.is_active ? 'active' : 'revoked'
   })) : [];
 
@@ -59,9 +59,8 @@ export default function ServiceTokenPage() {
 
     createMutation.mutate({
       name: newTokenName,
-      description: newTokenNote,
-      expires_at: expireAt.toISOString(),
-      is_active: true
+      note: newTokenNote,
+      expire_at: expireAt.toISOString()
     }, {
       onSuccess: (data: any) => {
         toast.success('Token created successfully!');

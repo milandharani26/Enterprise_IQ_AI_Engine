@@ -23,7 +23,8 @@ class ServiceAccountService:
                 created_by=data.created_by,
                 organization_id=org_id,
                 created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                updated_at=datetime.utcnow(),
+                expire_at=data.expire_at.replace(tzinfo=None) if data.expire_at else None
             )
             
             self.session.add(new_user)
@@ -49,7 +50,8 @@ class ServiceAccountService:
                 expire_at=data.expire_at,
                 is_active=new_user.is_active,
                 token=token,
-                created_by=new_user.created_by
+                created_by=new_user.created_by,
+                created_at=new_user.created_at
             )
         except Exception as e:
             await self.session.rollback()
@@ -61,15 +63,14 @@ class ServiceAccountService:
         
         accounts = []
         for user in users:
-            # Cannot extract expiration from hashed token, defaulting to current time
-            exp = datetime.now(timezone.utc)
             accounts.append(ServiceAccountResponse(
                 id=user.id,
                 name=user.user_name,
-                expire_at=exp,
+                expire_at=user.expire_at or datetime.now(timezone.utc),
                 is_active=user.is_active,
                 token=None, # Do not return hashed token
-                created_by=user.created_by
+                created_by=user.created_by,
+                created_at=user.created_at
             ))
         return accounts
 
@@ -105,6 +106,7 @@ class ServiceAccountService:
         )
         
         user.service_token = hash_token(new_token)
+        user.expire_at = new_exp.replace(tzinfo=None)
         await self.session.commit()
         
         return ServiceAccountResponse(
@@ -113,5 +115,6 @@ class ServiceAccountService:
             expire_at=new_exp,
             is_active=user.is_active,
             token=new_token,
-            created_by=user.created_by
+            created_by=user.created_by,
+            created_at=user.created_at
         )

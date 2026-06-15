@@ -20,3 +20,4 @@ class User(Base):
     created_by = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+    expire_at = Column(DateTime, nullable=True)

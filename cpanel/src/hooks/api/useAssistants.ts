@@ -77,7 +77,7 @@ export const useAssistantsHooks = () => {
   });
 
   const useUpdateAssistantStatusMutation = () => useMutation({
-    mutationFn: async ({ id, status_in }: { id: string; status_in: { is_active: boolean } }) => {
+    mutationFn: async ({ id, status_in }: { id: string; status_in: { status: string } }) => {
       const response = await apiClient.patch<Assistant>(`/assistants/${id}/status`, status_in);
       return response.data;
     },

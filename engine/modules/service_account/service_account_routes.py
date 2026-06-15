@@ -10,7 +10,7 @@ from engine.modules.service_account.service_account_service import ServiceAccoun
 from engine.shared.schemas.common import ErrorResponse
 from engine.modules.auth.auth_models import User
 
-router = APIRouter(tags=["Service Accounts"])
+router = APIRouter(prefix="/service-accounts", tags=["Service Accounts"])
 
 def get_service_account_service(session: AsyncSession = Depends(get_db)) -> ServiceAccountService:
     return ServiceAccountService(session=session)

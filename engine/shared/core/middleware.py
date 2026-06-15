@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from engine.shared.core.deps import get_db
 from engine.shared.core.security import JWTService
+from engine.shared.security.jwt_token import verify_token_hash
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from engine.modules.auth.auth_models import User
@@ -139,7 +140,7 @@ class AuthMiddleware:
         if user.account_type != "service_account":
             raise self._auth_error("Not a service account")
 
-        if user.service_token != x_api_key:
+        if not verify_token_hash(x_api_key, user.service_token):
             raise self._auth_error("Token revoked or mismatch")
 
         return user

@@ -16,6 +16,7 @@ class ServiceAccountResponse(BaseModel):
     is_active: bool
     token: Optional[str] = None
     created_by: Optional[UUID] = None
+    created_at: Optional[datetime] = None
 
 class ServiceAccountRegenerate(BaseModel):
     expire_at: Optional[datetime] = None
