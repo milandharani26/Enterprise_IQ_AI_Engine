@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from engine.shared.core.deps import get_db
+from engine.shared.core.security import JWTService
 from engine.modules.conversation.conversation_schemas import (
     NewUserMessagePayloadSchema,
     MessageResponseSchema,
@@ -17,13 +19,31 @@ router = APIRouter(
     tags=["Conversations & Chat Logs"]
 )
 
+security = HTTPBearer(auto_error=False)
+jwt_service = JWTService()
+
 @router.post("/chat", response_model=MessageResponseSchema, status_code=status.HTTP_201_CREATED)
-async def process_chat_message(payload: NewUserMessagePayloadSchema, db: AsyncSession = Depends(get_db)):
+async def process_chat_message(
+    payload: NewUserMessagePayloadSchema, 
+    db: AsyncSession = Depends(get_db),
+    auth: HTTPAuthorizationCredentials = Depends(security)
+):
     """
     Primary real-time chat execution hub.
     Receives prompt text from your frontend, logs it as a USER message,
     runs the AI core, logs the ASSISTANT response, and returns the AI reply.
     """
+    # 1. Extract organization_id from the Service Token if present
+    if auth and auth.credentials:
+        token_data = jwt_service.verify_token(auth.credentials)
+        if token_data:
+            token_org_id = token_data.get("organization_id")
+            if token_org_id:
+                try:
+                    payload.organization_id = UUID(str(token_org_id))
+                except ValueError:
+                    pass
+
     service = ConversationService(db)
     return await service.handle_chat_turn(payload)
 
