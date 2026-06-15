@@ -27,3 +27,8 @@ class OrganizationService:
         """Retrieves an organization by its primary ID."""
         result = await self.db.execute(select(Organization).where(Organization.id == org_id))
         return result.scalar_one_or_none()
+
+    async def get_all_organizations(self) -> list[Organization]:
+        """Retrieves all organizations."""
+        result = await self.db.execute(select(Organization))
+        return result.scalars().all()

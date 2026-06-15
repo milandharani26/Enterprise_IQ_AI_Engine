@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Boolean, DateTime
+from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from engine.shared.db.base_class import Base
@@ -9,6 +9,7 @@ class User(Base):
     __table_args__ = {'extend_existing': True}
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    organization_id = Column(UUID(as_uuid=True), ForeignKey('organizations.id'), nullable=True)
     email = Column(String(255), unique=True, nullable=True)
     password_hash = Column(Text, nullable=True)
     user_name = Column(String(100), nullable=False)

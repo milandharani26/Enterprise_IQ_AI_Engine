@@ -8,7 +8,7 @@ from engine.modules.conversation.conversation_schemas import (
     NewUserMessagePayloadSchema,
     MessageResponseSchema,
     ConversationDetailResponseSchema
-)
+)  
 from engine.modules.conversation.conversation_service import ConversationService
 from engine.modules.conversation.conversation_models import Conversation
 from uuid import UUID
@@ -35,14 +35,25 @@ async def process_chat_message(
     """
     # 1. Extract organization_id from the Service Token if present
     if auth and auth.credentials:
-        token_data = jwt_service.verify_token(auth.credentials)
-        if token_data:
-            token_org_id = token_data.get("organization_id")
-            if token_org_id:
-                try:
-                    payload.organization_id = UUID(str(token_org_id))
-                except ValueError:
-                    pass
+        try:
+            from jose import jwt
+            from engine.shared.config import get_settings
+            settings = get_settings()
+            service_secret = getattr(settings, "service_token_secret_key", "dev-service-token-secret-key")
+            
+            # Decode using the Service Token Secret Key
+            token_data = jwt.decode(auth.credentials, service_secret, algorithms=["HS256"])
+            
+            if token_data:
+                token_org_id = token_data.get("organization_id")
+                if token_org_id:
+                    try:
+                        payload.organization_id = UUID(str(token_org_id))
+                    except ValueError:
+                        pass
+        except Exception as e:
+            # Token might be invalid or a placeholder. If so, it will fall back to default organization.
+            print("Failed to decode service token:", e)
 
     service = ConversationService(db)
     return await service.handle_chat_turn(payload)

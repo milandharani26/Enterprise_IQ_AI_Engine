@@ -1,14 +1,9 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Paperclip, Mic, Sparkles, History, ChevronDown, X, MessageSquare, Check, FileText, StopCircle, Plus } from 'lucide-react';
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
+import { Send, Bot, User, Paperclip, Mic, Sparkles, X, FileText, StopCircle, Plus, Trash2 } from 'lucide-react';
+import { useConversationHooks } from '@/hooks/api/useConversation';
+import { useAppStore } from '@/store/useAppStore';
 
 const STATIC_ASSISTANTS = [
   { id: 'general', name: 'General Assistant', icon: <Bot className="w-4 h-4 text-blue-500 dark:text-blue-400" /> },
@@ -17,29 +12,25 @@ const STATIC_ASSISTANTS = [
   { id: 'creative', name: 'Creative Writer', icon: <Bot className="w-4 h-4 text-pink-500 dark:text-pink-400" /> },
 ];
 
-const STATIC_HISTORY = [
-  { id: '1', title: 'Previous chat about AI', date: '2 hours ago' },
-  { id: '2', title: 'Debugging React component', date: 'Yesterday' },
-  { id: '3', title: 'Database schema design', date: '3 days ago' },
-  { id: '4', title: 'Marketing copy generation', date: 'Last week' },
-];
-
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { user, activeOrganizationId } = useAppStore();
+  const { useSendChatMessageMutation } = useConversationHooks();
+
+  const [activeConversationId, setActiveConversationId] = useState<string>(() => crypto.randomUUID());
+  const sendMutation = useSendChatMessageMutation();
+
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // New State for Assistant Selection and History
   const [selectedAssistant, setSelectedAssistant] = useState(STATIC_ASSISTANTS[0]);
-  const [isAssistantDropdownOpen, setIsAssistantDropdownOpen] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
-  // New State for File and Audio
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [isThinking, setIsThinking] = useState(false);
+  
+  // Playground Local State for Messages
+  const [messages, setMessages] = useState<any[]>([]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -59,7 +50,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, sendMutation.isPending]);
 
   const handleSend = () => {
     if (!input.trim() && !selectedFile) return;
@@ -69,28 +60,42 @@ export default function ChatPage() {
       messageContent = `[Attachment: ${selectedFile.name}]\n${messageContent}`;
     }
 
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      role: 'user',
+    // Add User message immediately to Playground local state
+    setMessages(prev => [...prev, {
+      id: crypto.randomUUID(),
+      role: 'USER',
       content: messageContent,
       timestamp: new Date()
-    };
-    
-    setMessages(prev => [...prev, userMsg]);
+    }]);
+
     setInput('');
     setSelectedFile(null);
-    setIsThinking(true);
-    
-    // Mock response
-    setTimeout(() => {
-      setIsThinking(false);
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `I'm a placeholder response from ${selectedAssistant.name}! The backend is not yet connected.`,
-        timestamp: new Date()
-      }]);
-    }, 1000);
+
+    sendMutation.mutate({
+      conversation_id: activeConversationId,
+      user_id: user?.id || crypto.randomUUID(),
+      organization_id: activeOrganizationId || undefined,
+      agent_id: selectedAssistant.id === 'general' ? undefined : selectedAssistant.id,
+      content: messageContent,
+    }, {
+      onSuccess: (data) => {
+        // Add Assistant response to Playground local state
+        setMessages(prev => [...prev, {
+          id: data.id,
+          role: data.role,
+          content: data.content,
+          timestamp: new Date(data.created_at)
+        }]);
+      },
+      onError: () => {
+        setMessages(prev => [...prev, {
+          id: crypto.randomUUID(),
+          role: 'ASSISTANT',
+          content: 'Error: Failed to fetch response from the engine.',
+          timestamp: new Date()
+        }]);
+      }
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -100,17 +105,11 @@ export default function ChatPage() {
     }
   };
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.assistant-dropdown-container')) {
-        setIsAssistantDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const handleNewChat = () => {
+    setActiveConversationId(crypto.randomUUID());
+    setMessages([]);
+    setInput('');
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] rounded-3xl overflow-hidden bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm relative">
@@ -119,60 +118,17 @@ export default function ChatPage() {
       <div className="w-full max-w-3xl mx-auto px-4 pt-4 shrink-0 z-20">
         <div className="flex items-center justify-between gap-3 bg-black/5 dark:bg-white/5 backdrop-blur-xl border border-black/10 dark:border-white/10 rounded-full px-4 py-2 shadow-sm dark:shadow-2xl relative">
           
-          {/* Assistant Selector */}
-          <div className="relative assistant-dropdown-container">
-            <button 
-              onClick={() => setIsAssistantDropdownOpen(!isAssistantDropdownOpen)}
-              className="flex items-center gap-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full pr-3 pl-1 py-1 transition-colors"
-            >
-              <div className="w-8 h-8 rounded-full bg-blue-500/10 dark:bg-blue-500/20 flex items-center justify-center">
-                {selectedAssistant.icon}
-              </div>
-              <span className="font-medium text-sm text-gray-800 dark:text-gray-200">{selectedAssistant.name}</span>
-              <ChevronDown className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${isAssistantDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {/* Dropdown Menu */}
-            {isAssistantDropdownOpen && (
-              <div className="absolute top-full left-0 mt-2 w-56 rounded-2xl bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-xl border border-black/10 dark:border-white/10 shadow-xl dark:shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
-                <div className="p-2 space-y-1">
-                  {STATIC_ASSISTANTS.map(assistant => (
-                    <button
-                      key={assistant.id}
-                      onClick={() => {
-                        setSelectedAssistant(assistant);
-                        setIsAssistantDropdownOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
-                        selectedAssistant.id === assistant.id 
-                          ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' 
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <div className="w-6 h-6 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center shrink-0">
-                        {assistant.icon}
-                      </div>
-                      <span className="flex-1 text-left">{assistant.name}</span>
-                      {selectedAssistant.id === assistant.id && <Check className="w-4 h-4 shrink-0" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+          <div className="flex items-center gap-2 pl-2">
+            <Sparkles className="w-4 h-4 text-blue-500" />
+            <span className="font-semibold text-sm text-gray-800 dark:text-gray-200 tracking-tight">Playground Mode</span>
           </div>
 
           <div className="flex items-center gap-2">
             <button 
-              onClick={() => setMessages([])}
+              onClick={handleNewChat}
               className="flex items-center justify-center rounded-full h-8 px-4 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs text-gray-700 dark:text-gray-300 transition-colors"
             >
-              <Plus className="w-3 h-3 mr-2" /> New Chat
-            </button>
-            <button 
-              onClick={() => setIsHistoryOpen(true)}
-              className="flex items-center justify-center rounded-full h-8 px-4 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs text-gray-700 dark:text-gray-300 transition-colors"
-            >
-              <History className="w-3 h-3 mr-2" /> History
+              <Trash2 className="w-3.5 h-3.5 mr-2" /> Clear Chat
             </button>
           </div>
         </div>
@@ -185,40 +141,40 @@ export default function ChatPage() {
             <div className="min-h-full flex flex-col items-center justify-start pt-4 md:pt-16 pb-20 animate-in fade-in slide-in-from-bottom-8 duration-700">
               <div className="relative w-16 h-16 mb-8">
                 <div className="relative w-full h-full rounded-2xl bg-gray-50 dark:bg-white/5 flex items-center justify-center border border-gray-200 dark:border-white/10 shadow-sm">
-                  <Sparkles className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+                  <Bot className="w-6 h-6 text-gray-700 dark:text-gray-300" />
                 </div>
               </div>
               <h2 className="text-3xl font-semibold mb-3 text-gray-900 dark:text-white text-center tracking-tight">
-                How can I help you today?
+                LLM Testing Playground
               </h2>
               <p className="text-gray-500 dark:text-gray-400 mb-12 max-w-md text-center text-sm">
-                I'm your AI assistant. I can help you analyze data, generate code, or answer any questions you might have.
+                Any queries sent here will be processed by the Engine but will not be saved to the Postgres database.
               </p>
             </div>
           ) : (
             messages.map(message => (
               <div
                 key={message.id}
-                className={`flex gap-3 max-w-[85%] ${message.role === 'user' ? 'ml-auto flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2`}
+                className={`flex gap-3 max-w-[85%] ${message.role === 'USER' ? 'ml-auto flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2`}
               >
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-md dark:shadow-lg ${
-                  message.role === 'user' 
+                  message.role === 'USER' 
                     ? 'bg-gradient-to-br from-blue-500 to-purple-600' 
                     : 'bg-black/5 dark:bg-white/10 backdrop-blur-md border border-black/10 dark:border-white/10'
                 }`}>
-                  {message.role === 'user' ? <User className="w-4 h-4 text-white" /> : selectedAssistant.icon}
+                  {message.role === 'USER' ? <User className="w-4 h-4 text-white" /> : selectedAssistant.icon}
                 </div>
                 <div className={`px-5 py-3.5 text-sm rounded-3xl shadow-sm dark:shadow-lg border ${
-                  message.role === 'user'
+                  message.role === 'USER'
                     ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-tr-sm border-blue-500/50 shadow-blue-500/20'
-                    : 'bg-white/50 dark:bg-white/5 backdrop-blur-xl border-black/10 dark:border-white/10 text-gray-800 dark:text-gray-200 rounded-tl-sm'
+                    : 'bg-white/50 dark:bg-white/5 backdrop-blur-xl border-black/10 dark:border-white/10 text-gray-800 dark:text-gray-200 rounded-tl-sm whitespace-pre-wrap'
                 }`}>
                   {message.content}
                 </div>
               </div>
             ))
           )}
-          {isThinking && (
+          {sendMutation.isPending && (
             <div className="flex gap-3 max-w-[85%] animate-in fade-in slide-in-from-bottom-2">
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-md dark:shadow-lg bg-black/5 dark:bg-white/10 backdrop-blur-md border border-black/10 dark:border-white/10">
                 {selectedAssistant.icon}
@@ -258,11 +214,11 @@ export default function ChatPage() {
             )}
 
             <textarea
-              placeholder={isRecording ? "" : "Type your message..."}
+              placeholder={isRecording ? "" : "Type your message to test..."}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={isRecording}
+              disabled={isRecording || sendMutation.isPending}
               className={`min-h-[60px] max-h-[200px] w-full pr-32 pl-6 py-4 resize-none text-sm rounded-3xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 backdrop-blur-xl shadow-lg dark:shadow-2xl focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all text-gray-900 dark:text-white placeholder:text-gray-500 outline-none ${isRecording ? 'opacity-50' : ''}`}
               rows={1}
             />
@@ -302,9 +258,9 @@ export default function ChatPage() {
               </button>
               <button 
                 onClick={handleSend}
-                disabled={(!input.trim() && !selectedFile) || isRecording}
+                disabled={(!input.trim() && !selectedFile) || isRecording || sendMutation.isPending}
                 className={`w-9 h-9 rounded-full p-0 flex items-center justify-center transition-all ${
-                  (input.trim() || selectedFile) && !isRecording
+                  (input.trim() || selectedFile) && !isRecording && !sendMutation.isPending
                     ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/30' 
                     : 'bg-black/5 dark:bg-white/5 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                 }`}
@@ -312,46 +268,6 @@ export default function ChatPage() {
                 <Send className="w-4 h-4" />
               </button>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* History Drawer Overlay */}
-      {isHistoryOpen && (
-        <div 
-          className="absolute inset-0 bg-black/10 dark:bg-black/40 backdrop-blur-sm z-40 animate-in fade-in"
-          onClick={() => setIsHistoryOpen(false)}
-        />
-      )}
-
-      {/* History Drawer */}
-      <div className={`absolute top-0 right-0 h-full w-80 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-xl border-l border-black/10 dark:border-white/10 z-50 transform transition-transform duration-300 ease-in-out flex flex-col shadow-2xl ${
-        isHistoryOpen ? 'translate-x-0' : 'translate-x-full'
-      }`}>
-        <div className="flex items-center justify-between p-6 border-b border-black/10 dark:border-white/10">
-          <h3 className="font-semibold text-lg text-gray-900 dark:text-white">Chat History</h3>
-          <button 
-            onClick={() => setIsHistoryOpen(false)}
-            className="w-8 h-8 rounded-full hover:bg-black/10 dark:hover:bg-white/10 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-2">
-            {STATIC_HISTORY.map((item) => (
-              <button
-                key={item.id}
-                className="w-full flex flex-col items-start p-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-left group"
-              >
-                <div className="flex items-center gap-2 mb-1 w-full">
-                  <MessageSquare className="w-4 h-4 text-gray-400 dark:text-gray-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" />
-                  <span className="font-medium text-sm text-gray-800 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white truncate flex-1">{item.title}</span>
-                </div>
-                <span className="text-xs text-gray-500 dark:text-gray-500 pl-6">{item.date}</span>
-              </button>
-            ))}
           </div>
         </div>
       </div>

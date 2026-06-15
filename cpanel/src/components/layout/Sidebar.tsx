@@ -23,8 +23,19 @@ const navItems = [
 
 import { SettingsSidebar } from './SettingsSidebar';
 
+import { useAppStore } from '@/store/useAppStore';
+import { useOrganizationHooks } from '@/hooks/api/useOrganization';
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { activeOrganizationId } = useAppStore();
+  const { useOrganizationsQuery } = useOrganizationHooks();
+  const { data: organizations } = useOrganizationsQuery();
+
+  const activeOrg = Array.isArray(organizations) 
+    ? organizations.find((org: any) => org.id === activeOrganizationId) 
+    : undefined;
+  const companyName = activeOrg ? activeOrg.name : 'Enterprise GPT';
 
   if (pathname.startsWith('/settings')) {
     return <SettingsSidebar />;
@@ -38,7 +49,7 @@ export function Sidebar() {
             <Bot size={24} />
           </div>
           <div className="flex flex-col">
-            <h2 className="m-0 text-base font-bold tracking-tight text-primary-text">Enterprise GPT</h2>
+            <h2 className="m-0 text-base font-bold tracking-tight text-primary-text">{companyName}</h2>
             <span className="text-xs text-muted-text">Management Platform</span>
           </div>
         </div>

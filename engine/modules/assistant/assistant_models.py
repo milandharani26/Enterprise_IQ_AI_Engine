@@ -9,6 +9,7 @@ class Assistant(Base):
     __tablename__ = "assistant"
 
     assistant_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey('organizations.id'), nullable=True)
     assistant_name = Column(String(255), nullable=False, unique=True)
     assistant_code = Column(String(100), nullable=False, unique=True)
     type = Column(String(50), nullable=False, default='simple_reactive')

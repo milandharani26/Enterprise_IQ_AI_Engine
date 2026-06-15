@@ -38,11 +38,12 @@ def create_app() -> FastAPI:
     
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=_cors_origins,
+        allow_origins=_cors_origins if settings.ENV != "local" else [],
+        allow_origin_regex=".*" if settings.ENV == "local" else None,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["*"],
+        expose_headers=[],
     )
     
     # --- Custom Middlewares ---
@@ -66,6 +67,9 @@ def create_app() -> FastAPI:
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_frontend(full_path: str):
         """Fallback to index.html for frontend routing."""
+        if full_path.startswith("api/"):
+            return JSONResponse(status_code=404, content={"success": False, "message": "API Route Not Found"})
+
         file_path = _PUBLIC_DIR / full_path
         if file_path.exists() and file_path.is_file():
             return FileResponse(str(file_path))

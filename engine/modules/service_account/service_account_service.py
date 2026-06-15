@@ -13,7 +13,7 @@ class ServiceAccountService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_service_account(self, data: ServiceAccountCreate) -> ServiceAccountResponse:
+    async def create_service_account(self, data: ServiceAccountCreate, org_id: UUID) -> ServiceAccountResponse:
         try:
             # First create the user without a token
             new_user = User(
@@ -21,6 +21,7 @@ class ServiceAccountService:
                 account_type="service_account",
                 is_active=True,
                 created_by=data.created_by,
+                organization_id=org_id,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
                 expire_at=data.expire_at.replace(tzinfo=None) if data.expire_at else None
@@ -30,7 +31,12 @@ class ServiceAccountService:
             await self.session.flush() # Flush to get the new user ID without committing
             
             # Generate token with exact expire_at and the user's generated ID
-            token = create_service_account_token(user_id=str(new_user.id), user_name=data.name, expire_at=data.expire_at)
+            token = create_service_account_token(
+                user_id=str(new_user.id), 
+                user_name=data.name, 
+                expire_at=data.expire_at, 
+                organization_id=str(org_id)
+            )
             
             # Update the user with the hashed token
             new_user.service_token = hash_token(token)
@@ -51,8 +57,8 @@ class ServiceAccountService:
             await self.session.rollback()
             raise ExecutionError(f"Failed to create service account: {str(e)}")
 
-    async def list_service_accounts(self) -> List[ServiceAccountResponse]:
-        result = await self.session.execute(select(User).where(User.account_type == "service_account"))
+    async def list_service_accounts(self, org_id: UUID) -> List[ServiceAccountResponse]:
+        result = await self.session.execute(select(User).where(User.account_type == "service_account", User.organization_id == org_id))
         users = result.scalars().all()
         
         accounts = []
@@ -68,8 +74,9 @@ class ServiceAccountService:
             ))
         return accounts
 
-    async def revoke_service_account(self, account_id: UUID) -> bool:
-        user = await self.session.get(User, account_id)
+    async def revoke_service_account(self, account_id: UUID, org_id: UUID) -> bool:
+        result = await self.session.execute(select(User).where(User.id == account_id, User.organization_id == org_id))
+        user = result.scalars().first()
         if not user or user.account_type != "service_account":
             raise EntityNotFoundError(entity_type="Service Account", identifier=str(account_id))
             
@@ -78,8 +85,9 @@ class ServiceAccountService:
         await self.session.commit()
         return True
 
-    async def regenerate_service_account_token(self, account_id: UUID, data: ServiceAccountRegenerate) -> ServiceAccountResponse:
-        user = await self.session.get(User, account_id)
+    async def regenerate_service_account_token(self, account_id: UUID, data: ServiceAccountRegenerate, org_id: UUID) -> ServiceAccountResponse:
+        result = await self.session.execute(select(User).where(User.id == account_id, User.organization_id == org_id))
+        user = result.scalars().first()
         if not user or user.account_type != "service_account":
             raise EntityNotFoundError(entity_type="Service Account", identifier=str(account_id))
             
@@ -90,7 +98,12 @@ class ServiceAccountService:
             from datetime import timedelta
             new_exp = datetime.now(timezone.utc) + timedelta(days=365)
             
-        new_token = create_service_account_token(user_id=str(user.id), user_name=user.user_name, expire_at=new_exp)
+        new_token = create_service_account_token(
+            user_id=str(user.id), 
+            user_name=user.user_name, 
+            expire_at=new_exp,
+            organization_id=str(org_id)
+        )
         
         user.service_token = hash_token(new_token)
         user.expire_at = new_exp.replace(tzinfo=None)

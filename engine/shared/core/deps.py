@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request, Header
 from fastapi.security import APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -14,6 +14,10 @@ from engine.shared.core.security import JWTService
 
 auth_scheme = APIKeyHeader(name="Authorization", auto_error=False)
 jwt_service = JWTService()
+
+# Moved get_current_organization_id below get_current_user
+
+
 
 @dataclass
 class BaseDeps:
@@ -139,6 +143,19 @@ async def get_current_user(
             )
 
     return user
+
+async def get_current_organization_id(
+    x_organization_id: str = Header(None, alias="X-Organization-Id")
+) -> UUID:
+    """Extract and validate the organization ID from the request headers."""
+    if not x_organization_id:
+        raise HTTPException(status_code=400, detail="X-Organization-Id header is required")
+    try:
+        org_id = UUID(x_organization_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid X-Organization-Id format")
+        
+    return org_id
 
 async def get_current_admin(current_user = Depends(get_current_user)):
     # Delayed import to avoid circular import
