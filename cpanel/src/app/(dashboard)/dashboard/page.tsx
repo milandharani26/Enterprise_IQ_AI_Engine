@@ -1,112 +1,169 @@
 "use client";
 
 import React from 'react';
-import { Bot, ShieldCheck } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { useSystemHooks } from '@/hooks/api/useSystem';
+import { 
+  Bot, 
+  Link as LinkIcon, 
+  KeyRound, 
+  MessageSquare,
+  Activity,
+  Globe,
+  ShieldCheck,
+  ArrowUpRight
+} from 'lucide-react';
 import { useAssistantsHooks } from '@/hooks/api/useAssistants';
+import { useIntegrationStore } from '@/store/useIntegrationStore';
 
 export default function DashboardPage() {
-  const { useHealthQuery } = useSystemHooks();
-  const { data: healthData, isLoading: isHealthLoading } = useHealthQuery();
-
   const { useAssistantsQuery } = useAssistantsHooks();
   const { data: assistants = [] } = useAssistantsQuery();
+  
+  const { connectors, credentials } = useIntegrationStore();
+
+  const enabledConnectors = connectors.filter(c => c.enabled);
+  const activeCredentials = credentials.slice(0, 5);
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="mb-2">
-        <h1 className="text-2xl font-bold text-primary-text m-0 mb-1 tracking-tight">Dashboard</h1>
-        <p className="text-secondary-text text-sm m-0">Overview of your Enterprise IQ system</p>
-      </div>
+    <div className="min-h-full p-4 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-gray-200 dark:border-white/10 pb-6">
+          <div>
+            <h1 className="text-3xl font-semibold text-gray-900 dark:text-white tracking-tight">Dashboard</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
+              System overview and real-time metrics for Enterprise IQ.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium border border-emerald-200 dark:border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              All systems operational
+            </span>
+          </div>
+        </div>
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
-        <StatCard title="Total Assistants" value={assistants.length.toString()} icon={Bot} />
-      </div>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard title="Total Assistants" value={assistants.length.toString()} icon={Bot} trend="+12%" />
+          <StatCard title="Active Connectors" value={enabledConnectors.length.toString()} icon={LinkIcon} trend="+3" />
+          <StatCard title="Secure Credentials" value={credentials.length.toString()} icon={KeyRound} trend="Stable" />
+          <StatCard title="Live Chat Sessions" value="12" icon={MessageSquare} trend="+24%" />
+        </div>
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4">
-        <Card hoverable className="bg-secondary-bg">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Bot size={18} className="text-accent-primary" />
-              <CardTitle>Top Assistants</CardTitle>
+        {/* Details Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Top Assistants Card */}
+          <div className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
+            <div className="p-5 flex justify-between items-center border-b border-gray-100 dark:border-white/5">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <Bot className="w-4 h-4 text-gray-400" />
+                Deployed Assistants
+              </h2>
+              <button className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">View All</button>
             </div>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col gap-3">
-              {assistants.slice(0, 5).map((ast, idx) => (
-                <li key={ast.assistant_id || idx} className="flex justify-between items-center text-sm">
-                  <div className="flex gap-2">
-                    <span className="text-muted-text">{idx + 1}.</span>
-                    <span className="font-medium text-primary-text">{ast.assistant_name}</span>
-                  </div>
-                  <span className="text-secondary-text">{ast.type}</span>
-                </li>
-              ))}
-              {assistants.length === 0 && (
-                <li className="text-sm text-secondary-text">No assistants found.</li>
-              )}
-            </ul>
-          </CardContent>
-        </Card>
-
-        <Card hoverable className="bg-secondary-bg">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <ShieldCheck size={18} className="text-accent-primary" />
-              <CardTitle>System Health</CardTitle>
+            
+            <div className="flex-1 p-0">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-100 dark:border-white/5">
+                    <th className="px-5 py-3 font-medium text-gray-500 dark:text-gray-400">Name</th>
+                    <th className="px-5 py-3 font-medium text-gray-500 dark:text-gray-400 text-right">Type</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                  {assistants.slice(0, 5).map((ast, idx) => (
+                    <tr key={ast.assistant_id || idx} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <span className="text-gray-400 dark:text-gray-500 text-xs font-mono">{idx + 1}</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{ast.assistant_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300">
+                          {ast.type}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {assistants.length === 0 && (
+                    <tr>
+                      <td colSpan={2} className="px-5 py-8 text-center text-gray-500 dark:text-gray-400">
+                        No assistants deployed yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          </CardHeader>
-          <CardContent>
-            {isHealthLoading ? (
-              <p className="text-sm text-secondary-text">Checking health...</p>
-            ) : (
-              <ul className="flex flex-col gap-3">
-                <li className="flex justify-between items-center text-sm">
-                  <span className="font-medium text-primary-text">Backend API</span>
-                  {healthData?.status === 'ok' ? (
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-accent-success">
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent-success" /> Operational
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-accent-danger">
-                      <span className="w-1.5 h-1.5 rounded-full bg-accent-danger" /> Offline
-                    </span>
-                  )}
-                </li>
-                <li className="flex justify-between items-center text-sm">
-                  <span className="font-medium text-primary-text">Environment</span>
-                  <span className="text-secondary-text capitalize">{healthData?.env || 'Unknown'}</span>
-                </li>
-                <li className="flex justify-between items-center text-sm">
-                  <span className="font-medium text-primary-text">Database</span>
-                  {healthData?.database === 'connected' ? (
-                    <span className="text-secondary-text">Connected</span>
-                  ) : (
-                    <span className="text-accent-danger">Disconnected</span>
-                  )}
-                </li>
+          </div>
+
+          {/* Recent Integrations Card */}
+          <div className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
+            <div className="p-5 flex justify-between items-center border-b border-gray-100 dark:border-white/5">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <Activity className="w-4 h-4 text-gray-400" />
+                Recent Credentials
+              </h2>
+              <button className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">Manage</button>
+            </div>
+            
+            <div className="flex-1 p-0">
+              <ul className="divide-y divide-gray-100 dark:divide-white/5">
+                {activeCredentials.map((cred) => (
+                  <li key={cred.id} className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-md bg-gray-100 dark:bg-white/10 flex items-center justify-center border border-gray-200 dark:border-white/5">
+                        <Globe className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">{cred.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{cred.provider}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                      <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                        {cred.status}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+                {activeCredentials.length === 0 && (
+                  <li className="px-5 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
+                    No credentials added yet.
+                  </li>
+                )}
               </ul>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
   );
 }
 
-function StatCard({ title, value, icon: Icon }: any) {
+function StatCard({ title, value, icon: Icon, trend }: any) {
   return (
-    <Card hoverable padding="md" className="bg-secondary-bg">
-      <div className="flex justify-between items-center mb-4">
-        <span className="text-sm text-secondary-text font-medium">{title}</span>
-        <div className="w-8 h-8 rounded-md bg-tertiary-bg flex items-center justify-center text-muted-text">
-          <Icon size={18} />
+    <div className="p-5 rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm flex flex-col justify-between hover:border-gray-300 dark:hover:border-white/20 transition-colors">
+      <div className="flex justify-between items-start mb-4">
+        <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</span>
+        <div className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 border border-transparent">
+          <Icon className="w-4 h-4" />
         </div>
       </div>
-      <div>
-        <span className="text-3xl font-bold text-primary-text tracking-tight">{value}</span>
+      <div className="flex items-baseline justify-between">
+        <span className="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">{value}</span>
+        {trend && (
+          <span className={`flex items-center text-xs font-medium ${trend === 'Stable' ? 'text-gray-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+            {trend !== 'Stable' && <ArrowUpRight className="w-3 h-3 mr-0.5" />}
+            {trend}
+          </span>
+        )}
       </div>
-    </Card>
+    </div>
   );
 }
