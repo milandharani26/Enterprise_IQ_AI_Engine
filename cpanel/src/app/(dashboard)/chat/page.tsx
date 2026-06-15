@@ -113,7 +113,7 @@ export default function ChatPage() {
   }, []);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] rounded-3xl overflow-hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-50/50 dark:from-blue-900/20 via-background to-background border border-black/5 dark:border-white/5 relative">
+    <div className="flex flex-col h-[calc(100vh-8rem)] rounded-3xl overflow-hidden bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm relative">
       
       {/* Floating Header */}
       <div className="w-full max-w-3xl mx-auto px-4 pt-4 shrink-0 z-20">
@@ -182,14 +182,13 @@ export default function ChatPage() {
       <div className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className="max-w-4xl mx-auto space-y-6">
           {messages.length === 0 ? (
-            <div className="min-h-full flex flex-col items-center justify-start pt-4 md:pt-10 pb-20 animate-in fade-in slide-in-from-bottom-8 duration-700">
-              <div className="relative w-24 h-24 mb-8">
-                <div className="absolute inset-0 rounded-full bg-blue-500/20 blur-2xl animate-pulse" />
-                <div className="relative w-full h-full rounded-3xl bg-gradient-to-br from-blue-500/10 dark:from-blue-500/20 to-purple-500/10 dark:to-purple-500/20 flex items-center justify-center border border-black/10 dark:border-white/10 backdrop-blur-sm shadow-xl dark:shadow-2xl">
-                  <Sparkles className="w-10 h-10 text-blue-500 dark:text-blue-400" />
+            <div className="min-h-full flex flex-col items-center justify-start pt-4 md:pt-16 pb-20 animate-in fade-in slide-in-from-bottom-8 duration-700">
+              <div className="relative w-16 h-16 mb-8">
+                <div className="relative w-full h-full rounded-2xl bg-gray-50 dark:bg-white/5 flex items-center justify-center border border-gray-200 dark:border-white/10 shadow-sm">
+                  <Sparkles className="w-6 h-6 text-gray-700 dark:text-gray-300" />
                 </div>
               </div>
-              <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-600 dark:from-blue-400 to-purple-600 dark:to-purple-400 bg-clip-text text-transparent text-center">
+              <h2 className="text-3xl font-semibold mb-3 text-gray-900 dark:text-white text-center tracking-tight">
                 How can I help you today?
               </h2>
               <p className="text-gray-500 dark:text-gray-400 mb-12 max-w-md text-center text-sm">
