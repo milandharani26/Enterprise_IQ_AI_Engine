@@ -23,9 +23,9 @@ export default function OrganizationPage() {
   const [newOrgName, setNewOrgName] = useState('');
   const [newOrgEmail, setNewOrgEmail] = useState('');
 
-  const filteredOrgs = organizations?.filter(org => 
-    org.name.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  const filteredOrgs = Array.isArray(organizations) 
+    ? organizations.filter(org => org.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : [];
 
   const handleSelectOrg = (id: string) => {
     setOrganization(id);
