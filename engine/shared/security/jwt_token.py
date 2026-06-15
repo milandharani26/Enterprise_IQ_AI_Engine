@@ -7,15 +7,18 @@ settings = get_settings()
 SERVICE_TOKEN_SECRET_KEY = getattr(settings, "service_token_secret_key", "dev-service-token-secret-key")
 ALGORITHM = "HS256"
 
-def create_service_account_token(user_id: str, user_name: str, expire_at: datetime) -> str:
+def create_service_account_token(user_id: str, user_name: str, expire_at: datetime, organization_id: str = None) -> str:
     """
-    Generates a JWT token that expires at the exact specified datetime and contains user_id.
+    Generates a JWT token that expires at the exact specified datetime and contains user_id and organization_id.
     """
     # Ensure expire_at is UTC
     if expire_at.tzinfo is None:
         expire_at = expire_at.replace(tzinfo=timezone.utc)
         
     to_encode = {"sub": user_name, "user_id": str(user_id), "type": "service_account"}
+    if organization_id:
+        to_encode["organization_id"] = str(organization_id)
+        
     to_encode.update({"exp": int(expire_at.timestamp())})
     
     encoded_jwt = jwt.encode(to_encode, SERVICE_TOKEN_SECRET_KEY, algorithm=ALGORITHM)

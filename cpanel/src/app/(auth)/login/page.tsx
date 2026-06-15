@@ -24,7 +24,7 @@ export default function LoginPage() {
       {
         onSuccess: () => {
           toast.success('Successfully logged in!');
-          router.push('/dashboard');
+          router.push('/organization');
         },
         onError: (error: any) => {
           const msg = error?.response?.data?.message || 'Login failed. Please check your credentials.';

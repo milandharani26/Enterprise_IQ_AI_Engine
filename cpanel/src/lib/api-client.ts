@@ -3,9 +3,19 @@ import toast from 'react-hot-toast';
 
 const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
+import Cookies from 'js-cookie';
+
 export const apiClient = axios.create({
   baseURL,
   withCredentials: true,
+});
+
+apiClient.interceptors.request.use((config) => {
+  const activeOrgId = Cookies.get('active_org_id');
+  if (activeOrgId) {
+    config.headers['X-Organization-Id'] = activeOrgId;
+  }
+  return config;
 });
 
 apiClient.interceptors.response.use(
