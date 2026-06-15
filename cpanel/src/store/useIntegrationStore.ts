@@ -31,16 +31,8 @@ interface IntegrationState {
 }
 
 const INITIAL_CONNECTORS: Connector[] = [
-  { id: 'google_calendar', name: 'Google Calendar', provider: 'Google', icon: Calendar, colorBase: 'blue', enabled: false, credentialMapped: false },
-  { id: 'google_oauth', name: 'Google OAuth', provider: 'Google', icon: Fingerprint, colorBase: 'blue', enabled: false, credentialMapped: false },
   { id: 'google_drive', name: 'Google Drive', provider: 'Google', icon: HardDrive, colorBase: 'blue', enabled: false, credentialMapped: false },
-  { id: 'google_email', name: 'Google Email', provider: 'Google', icon: Mail, colorBase: 'blue', enabled: false, credentialMapped: false },
-  { id: 'openai', name: 'OpenAI', provider: 'OpenAI', icon: Sparkles, colorBase: 'purple', enabled: false, credentialMapped: false },
-  { id: 'anthropic', name: 'Anthropic', provider: 'Anthropic', icon: Bot, colorBase: 'orange', enabled: false, credentialMapped: false },
   { id: 'postgres', name: 'PostgreSQL', provider: 'PostgreSQL', icon: Database, colorBase: 'indigo', enabled: false, credentialMapped: false },
-  { id: 'microsoft_calendar', name: 'Microsoft Calendar', provider: 'Microsoft', icon: Calendar, colorBase: 'cyan', enabled: false, credentialMapped: false },
-  { id: 'microsoft_drive', name: 'Microsoft Drive', provider: 'Microsoft', icon: HardDrive, colorBase: 'cyan', enabled: false, credentialMapped: false },
-  { id: 'microsoft_email', name: 'Microsoft Email', provider: 'Microsoft', icon: Mail, colorBase: 'cyan', enabled: false, credentialMapped: false },
 ];
 
 export const useIntegrationStore = create<IntegrationState>((set) => ({
