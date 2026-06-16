@@ -22,6 +22,7 @@ class MessageResponseSchema(MessageBaseSchema):
     conversation_id: UUID
     organization_id: UUID
     created_at: datetime
+    metadata_json: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True

@@ -7,6 +7,8 @@ from sqlalchemy import asc
 from engine.modules.conversation.conversation_models import Conversation, ConversationMessage, MessageRole
 from engine.modules.conversation.conversation_schemas import NewUserMessagePayloadSchema
 from engine.modules.organization.organization_models import Organization
+from engine.modules.assistant.assistant_models import Assistant
+from engine.modules.assistant.runtime.executor import AssistantExecutor
 
 class ConversationService:
     def __init__(self, db: AsyncSession):
@@ -29,22 +31,33 @@ class ConversationService:
         await self.db.flush()
         return default_org.id
 
+    async def _resolve_assistant(self, agent_id: uuid.UUID, org_id: uuid.UUID) -> Assistant | None:
+        if not agent_id:
+            return None
+        result = await self.db.execute(
+            select(Assistant).where(
+                Assistant.assistant_id == agent_id,
+                Assistant.organization_id == org_id,
+                Assistant.deleted_at.is_(None),
+                Assistant.status == "enabled",
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def handle_chat_turn(self, payload: NewUserMessagePayloadSchema, save_to_db: bool = True) -> ConversationMessage:
         """
-        Processes a full message loop turn for the Admin Backend:
+        Processes a full message loop turn:
         1. Resolve or construct the conversation session
-        2. Persist the USER prompt in the Admin DB.
-        3. Generate the AI response locally.
-        4. Persist the ASSISTANT generated feedback response in the Admin DB.
-        5. Return the ASSISTANT message (which NestJS will wait for).
+        2. Persist the USER prompt
+        3. Execute assistant with RAG tools when configured
+        4. Persist the ASSISTANT response
+        5. Return the ASSISTANT message
         """
-        # Determine the organization ID
         org_id = payload.organization_id
         if not org_id and save_to_db:
             org_id = await self._get_or_create_default_org()
 
         if save_to_db:
-            # Step 1: Resolve or construct the conversation session
             result = await self.db.execute(
                 select(Conversation).where(Conversation.id == payload.conversation_id)
             )
@@ -61,7 +74,6 @@ class ConversationService:
                 self.db.add(conversation)
                 await self.db.flush()
 
-            # Step 2: Persist the User's Message locally in Admin DB
             user_message = ConversationMessage(
                 id=uuid.uuid4(),
                 conversation_id=payload.conversation_id,
@@ -74,12 +86,50 @@ class ConversationService:
 
         from datetime import datetime
         
-        # Step 3: Generate the AI response locally
-        # TODO: Replace with your actual LLM logic (e.g. OpenAI, Anthropic, Gemini calls)
         ai_generated_text = f"Processed engine response for prompt: '{payload.content}'"
-
-        # Provide defaults for Pydantic schema validation if not saving to DB
+        content_blocks = []
         final_org_id = org_id if org_id else uuid.uuid4()
+
+        assistant = None
+        if payload.agent_id and org_id:
+            assistant = await self._resolve_assistant(payload.agent_id, org_id)
+
+        if not payload.agent_id:
+            ai_generated_text = (
+                "No assistant selected. Choose an assistant with rag_search enabled in the chat header."
+            )
+            content_blocks = [
+                {"type": "markdown", "data": {"content": ai_generated_text}}
+            ]
+        elif not assistant:
+            ai_generated_text = (
+                "Assistant not found for this organization. "
+                "Create or enable an assistant with the rag_search tool in Assistants."
+            )
+            content_blocks = [
+                {"type": "markdown", "data": {"content": ai_generated_text}}
+            ]
+        elif assistant:
+            try:
+                executor = AssistantExecutor()
+                ai_generated_text, content_blocks = await executor.execute(
+                    session_id=str(payload.conversation_id),
+                    conversation_id=str(payload.conversation_id),
+                    user_id=str(payload.user_id),
+                    assistant_id=str(assistant.assistant_id),
+                    query=payload.content,
+                    organization_ids=[str(org_id)],
+                    assistant=assistant,
+                )
+            except Exception as e:
+                ai_generated_text = (
+                    f"I encountered an error while processing your request: {e}"
+                )
+                content_blocks = [
+                    {"type": "markdown", "data": {"content": ai_generated_text}}
+                ]
+
+        metadata = {"content_blocks": content_blocks} if content_blocks else None
 
         assistant_message = ConversationMessage(
             id=uuid.uuid4(),
@@ -87,13 +137,12 @@ class ConversationService:
             role=MessageRole.ASSISTANT,
             content=ai_generated_text,
             organization_id=final_org_id,
+            metadata_json=metadata,
             created_at=datetime.utcnow()
         )
 
         if save_to_db:
-            # Step 4: Persist the Assistant's Response locally in Admin DB
             self.db.add(assistant_message)
-            # Commit transactional mutations to PostgreSQL safely
             await self.db.commit()
             await self.db.refresh(assistant_message)
 

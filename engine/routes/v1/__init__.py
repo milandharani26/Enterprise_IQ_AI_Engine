@@ -5,6 +5,7 @@ from engine.modules.auth import router as auth_router
 from engine.modules.service_account import router as service_account_router
 from engine.modules.conversation import conversation_router
 from engine.modules.organization import organization_router
+from engine.modules.documents import router as documents_router
 
 router = APIRouter()
 
@@ -15,3 +16,4 @@ router.include_router(auth_router)
 router.include_router(service_account_router)
 router.include_router(conversation_router)
 router.include_router(organization_router)
+router.include_router(documents_router)

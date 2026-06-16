@@ -10,12 +10,14 @@ import {
   Link as LinkIcon, 
   Key, 
   Settings,
-  LogOut
+  LogOut,
+  FileText
 } from 'lucide-react';
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Chat', href: '/chat', icon: MessageSquare },
+  { name: 'Documents', href: '/documents', icon: FileText },
   { name: 'Assistants', href: '/assistants', icon: Bot },
   { name: 'Connectors', href: '/connector', icon: LinkIcon },
   { name: 'Credentials', href: '/credentials', icon: Key },

@@ -37,28 +37,26 @@ async def get_db():
 async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    token: str = Depends(auth_scheme)
+    token: str = Depends(auth_scheme),
 ):
     # Delayed import to avoid circular import
     from engine.modules.auth.auth_models import User
-    """Validate token and return current user."""
-    # AuthMiddleware already validates bearer tokens and attaches a user.
-    # Reuse it to avoid duplicate DB lookups on every request.
+    """Validate session from access_token cookie or Authorization header."""
     request_user = getattr(request.state, "user", None)
     if request_user is not None:
         return request_user
 
+    # Prefer HttpOnly cookie set by /auth/login (same as middleware.require_admin)
+    token = request.cookies.get("access_token") or token
     if not token:
         raise HTTPException(
             status_code=401,
             detail="Session required",
         )
 
-    # Clean token (remove 'Bearer ' if present in the input)
     if token.startswith("Bearer "):
-        token = token.replace("Bearer ", "")
+        token = token.replace("Bearer ", "", 1).strip()
     
-    # Try to decode and verify the token
     try:
         payload = jwt_service.verify_token(token)
         if not payload:
@@ -73,6 +71,8 @@ async def get_current_user(
             detail="Your session has expired. Please login again",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=401,
@@ -80,7 +80,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
         
-    user_id_raw = payload.get("sub")
+    user_id_raw = payload.get("user_id") or payload.get("sub")
     if user_id_raw is None:
         raise HTTPException(
             status_code=401,
@@ -88,7 +88,7 @@ async def get_current_user(
         )
 
     try:
-        user_id = UUID(user_id_raw) if isinstance(user_id_raw, str) else user_id_raw
+        user_id = UUID(str(user_id_raw))
     except (ValueError, TypeError):
         raise HTTPException(
             status_code=401,
@@ -114,16 +114,12 @@ async def get_current_user(
             detail="Invalid username or password",
         )
  
-    # Validation Checks
-    # Validation Checks
     if not user.is_active:
         raise HTTPException(
             status_code=403,
             detail="Account is disabled",
         )
 
-    # Expiry check (DB-level) – apply only to interactive users.
-    # Service accounts rely on JWT expiry + token_hash rotation instead.
     expires_at = getattr(user, "expires_at", None)
     if user.account_type != "service_account" and expires_at:
         now = datetime.utcnow()
@@ -133,7 +129,6 @@ async def get_current_user(
                 detail="Your session has expired. Please login again",
             )
 
-    # Token hash check (critical for service accounts to invalidate old JWTs on rotation)
     jwt_token_hash = payload.get("token_hash")
     if jwt_token_hash:
         if user.password_hash != jwt_token_hash:

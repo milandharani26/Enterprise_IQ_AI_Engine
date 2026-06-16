@@ -77,7 +77,9 @@ export default function AssistantsPage() {
       assistant_code: formData.assistant_name.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
       type: formData.type,
       description: formData.description,
-      status: 'enabled'
+      status: 'enabled',
+      tools: [{ tool_id: 'rag_search', usage_instructions: 'Always call first for document questions, lists, summaries, and explanations. Never answer document content without searching.' }],
+      system_prompt: 'You are a document assistant. Always use rag_search before answering questions about files or knowledge. List indexed documents when asked. Cite source titles. Do not invent content.',
     }, {
       onSuccess: () => {
         setIsModalOpen(false);

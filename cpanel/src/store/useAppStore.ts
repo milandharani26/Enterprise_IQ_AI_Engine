@@ -13,8 +13,10 @@ interface AppState {
   user: User | null;
   isAuthenticated: boolean;
   activeOrganizationId: string | null;
+  hasHydrated: boolean;
   setUser: (user: User | null) => void;
   setOrganization: (id: string | null) => void;
+  hydrateFromCookies: () => void;
   logout: () => void;
   
   isSidebarOpen: boolean;
@@ -23,10 +25,15 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  // User State
+  // User State — activeOrganizationId is hydrated client-side to avoid SSR mismatch
   user: null,
   isAuthenticated: false,
-  activeOrganizationId: Cookies.get('active_org_id') || null,
+  activeOrganizationId: null,
+  hasHydrated: false,
+  hydrateFromCookies: () => {
+    const id = Cookies.get('active_org_id') || null;
+    set({ activeOrganizationId: id, hasHydrated: true });
+  },
   setUser: (user) => set({ user, isAuthenticated: !!user }),
   setOrganization: (id) => {
     if (id) {
@@ -34,7 +41,7 @@ export const useAppStore = create<AppState>((set) => ({
     } else {
       Cookies.remove('active_org_id');
     }
-    set({ activeOrganizationId: id });
+    set({ activeOrganizationId: id, hasHydrated: true });
   },
   logout: () => {
     Cookies.remove('active_org_id');

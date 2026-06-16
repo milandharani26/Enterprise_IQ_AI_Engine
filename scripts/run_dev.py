@@ -1,14 +1,22 @@
 import subprocess
 import os
 import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
 
 def main():
     print("Starting backend...")
-    backend = subprocess.Popen([sys.executable, "-m", "poetry", "run", "uvicorn", "main:app", "--reload"])
+    backend = subprocess.Popen(
+        [sys.executable, "-m", "poetry", "run", "uvicorn", "main:app", "--reload"],
+        cwd=ROOT,
+    )
     
     print("Starting frontend...")
-    os.chdir("cpanel")
-    frontend = subprocess.Popen(["npm", "run", "dev"], shell=True)
+    frontend = subprocess.Popen(
+        ["npm", "run", "dev"],
+        cwd=ROOT / "cpanel",
+    )
     
     try:
         backend.wait()
