@@ -159,7 +159,11 @@ async def fetch_bytes_from_uri(uri: str) -> bytes:
 
     try:
         if scheme == "file":
-            return await asyncio.to_thread(_fetch_file_sync, unquote(parsed.path))
+            path = unquote(parsed.path)
+            import os
+            if os.name == "nt" and path.startswith("/") and len(path) > 2 and path[2] == ":":
+                path = path[1:]
+            return await asyncio.to_thread(_fetch_file_sync, path)
         if scheme == "s3":
             return await asyncio.to_thread(_fetch_s3_sync, uri)
         if scheme == "gs":
