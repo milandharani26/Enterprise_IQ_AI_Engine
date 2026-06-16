@@ -5,11 +5,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from dotenv import load_dotenv
 
-# Resolve engine/.env deterministically so DATABASE_URL etc. are identical in
-# debugger and terminal runs regardless of current working directory.
-_engine_root = Path(__file__).resolve().parents[2]
-_env_file = _engine_root / ".env"
-load_dotenv(_env_file)
+# Load the single repo-root .env (no engine/.env override).
+_repo_root = Path(__file__).resolve().parents[3]
+_root_env = _repo_root / ".env"
+load_dotenv(_root_env)
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -114,6 +113,11 @@ class Settings(BaseSettings):
 
     # ===== DOCUMENT INGESTION: PROCESSING =====
     max_document_size_mb: int = Field(default=50, alias="MAX_DOCUMENT_SIZE_MB", description="Maximum document file size in MB")
+    document_upload_dir: str = Field(
+        default="/tmp/enterpriseiq_uploads",
+        alias="DOCUMENT_UPLOAD_DIR",
+        description="Directory for persisted cpanel uploads (file:// source_url for background indexing)",
+    )
     chunk_size_tokens: int = Field(default=512, alias="CHUNK_SIZE_TOKENS", description="Target tokens per chunk")
     chunk_overlap_tokens: int = Field(default=50, alias="CHUNK_OVERLAP_TOKENS", description="Overlap between chunks in tokens")
     max_chunk_size_tokens: int = Field(default=2048, alias="MAX_CHUNK_SIZE_TOKENS", description="Hard limit for chunk size")
@@ -188,7 +192,7 @@ class Settings(BaseSettings):
     azure_openai_audio_model: str = Field(default="whisper-1", alias="AZURE_OPENAI_AUDIO_MODEL")
 
     model_config = SettingsConfigDict(
-        env_file=_env_file,
+        env_file=str(_root_env),
         env_file_encoding="utf-8",
         extra="ignore",
     )

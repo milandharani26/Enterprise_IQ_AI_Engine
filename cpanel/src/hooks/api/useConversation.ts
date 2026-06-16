@@ -8,6 +8,7 @@ export interface Message {
   content: string;
   role: 'USER' | 'ASSISTANT' | 'SYSTEM';
   created_at: string;
+  metadata_json?: { content_blocks?: any[] };
 }
 
 export interface NewMessagePayload {

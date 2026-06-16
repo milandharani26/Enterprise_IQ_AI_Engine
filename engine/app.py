@@ -96,6 +96,23 @@ def create_app() -> FastAPI:
         setup_logging(service_name="engine")
         logger.setLevel(logging.DEBUG if settings.ENV == "local" else logging.INFO)
         logger.info(f"🚀 Engine starting — env={settings.ENV}")
+
+        # Register document loaders for ingestion pipeline
+        try:
+            from engine.pipelines.ingestion.loaders import register_all_loaders
+            register_all_loaders()
+            logger.info("✅ Document loaders registered")
+        except Exception as e:
+            logger.warning(f"Document loader registration failed: {e}")
+
+        # Register assistant runtime types and tools
+        try:
+            from engine.modules.assistant.runtime.assistant_factory import AssistantFactory
+            AssistantFactory.register_types()
+            from engine.modules.assistant.tools import tool_registry  # noqa: F401
+            logger.info("✅ Assistant runtime initialized")
+        except Exception as e:
+            logger.warning(f"Assistant runtime initialization failed: {e}")
         
         # Check pgvector or database connection
         try:

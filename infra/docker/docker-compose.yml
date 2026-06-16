@@ -3,26 +3,43 @@ version: '3.8'
 services:
   backend:
     build: 
-      context: ../..
+      context: .
       dockerfile: infra/docker/Dockerfile
     ports:
       - "8000:8000"
     env_file:
-      - ../../engine/.env
+      - ../../.env
     depends_on:
       - db
   
   frontend:
     build:
-      context: ../../cpanel
+      context: cpanel
     ports:
       - "3000:3000"
 
   db:
-    image: postgres:15
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.postgres
+    image: enterpriseiq-postgres-pgvector:15
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: dbname
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: enterprise_engine
     ports:
-      - "5432:5432"
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:
