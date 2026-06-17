@@ -1,13 +1,35 @@
-"""CSV document loader using LlamaIndex SimpleCSVReader."""
+"""CSV document loader — pure Python stdlib, no LlamaIndex required.
 
-import asyncio
+Root cause of the error chain:
+─────────────────────────────────────────────────────────────────────────────
+The original csv_loader.py imported LlamaIndex SimpleCSVReader at the top of
+load_from_url():
+
+    from llama_index.readers.file import SimpleCSVReader
+
+If llama-index-readers-file is not installed (or the package is missing), this
+raises ImportError which bubbles up as a DocumentLoadError.
+
+BUT — the loader then immediately re-parsed the same file using Python's built-in
+csv module anyway. SimpleCSVReader was doing nothing useful; the final markdown
+table was built entirely from stdlib csv.reader(). The LlamaIndex call was dead
+weight that introduced a hard dependency and a crash path.
+
+Fix:
+    Remove SimpleCSVReader entirely. Parse with stdlib csv only.
+    No new packages required — csv, io, chardet (optional, already present) only.
+─────────────────────────────────────────────────────────────────────────────
+"""
+
+import csv
+import io
 import logging
-import os
-import tempfile
-from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from engine.pipelines.ingestion.exceptions import CorruptDocumentError, DocumentLoadError
+from engine.pipelines.ingestion.exceptions import (
+    CorruptDocumentError,
+    DocumentLoadError,
+)
 from engine.pipelines.ingestion.loaders.base_loader import DocumentLoader
 from engine.pipelines.ingestion.loaders.fetch import fetch_bytes_from_uri
 
@@ -18,16 +40,19 @@ MAX_ROWS_PREVIEW = 100
 
 class CsvLoader(DocumentLoader):
     """
-    Load and extract text from CSV files using LlamaIndex SimpleCSVReader.
+    Load and extract text from CSV files using Python's built-in csv module.
 
-    LlamaIndex SimpleCSVReader reads CSV rows as structured text.
-    Falls back to custom markdown-table rendering for large files to preserve
-    readability in chunked retrieval.
+    No LlamaIndex, no torch, no external dependencies beyond chardet (optional).
+    Renders output as a markdown table for clean RAG chunking.
     """
 
     @property
     def supported_mimetypes(self) -> List[str]:
-        return ["text/csv"]
+        return [
+            "text/csv",
+            "application/csv",
+            "text/comma-separated-values",
+        ]
 
     async def load_from_url(self, uri: str) -> Tuple[str, Dict[str, Any]]:
         if not self.validate_uri(uri):
@@ -37,65 +62,41 @@ class CsvLoader(DocumentLoader):
         if not raw:
             return "", {"format": "csv", "rows": 0, "columns": 0}
 
-        # Decode bytes (handle encoding)
+        # ── Encoding detection ────────────────────────────────────────────────
         detected_encoding = "utf-8"
         try:
             raw.decode("utf-8")
         except UnicodeDecodeError:
             try:
                 import chardet
+
                 result = chardet.detect(raw)
                 detected_encoding = result.get("encoding") or "utf-8"
-                raw = raw.decode(detected_encoding).encode("utf-8")
             except Exception:
-                raw = raw.decode("utf-8", errors="replace").encode("utf-8")
-                detected_encoding = "utf-8 (fallback)"
+                detected_encoding = "utf-8"
 
         try:
-            from llama_index.readers.file import SimpleCSVReader
-        except ImportError:
-            raise DocumentLoadError(
-                "llama-index-readers-file is required; run: pip install llama-index-readers-file"
-            )
+            text_content = raw.decode(detected_encoding, errors="replace")
+        except Exception:
+            text_content = raw.decode("utf-8", errors="replace")
+            detected_encoding = "utf-8 (fallback)"
 
-        tmp_path = None
+        # ── Dialect sniff ─────────────────────────────────────────────────────
         try:
-            with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="wb") as tmp:
-                tmp.write(raw)
-                tmp_path = tmp.name
+            dialect = csv.Sniffer().sniff(text_content[:8192], delimiters=",\t;")
+        except csv.Error:
+            dialect = csv.excel  # safe default: comma-separated, double-quote
 
-            reader = SimpleCSVReader(encoding=detected_encoding)
-            docs = await asyncio.to_thread(reader.load_data, Path(tmp_path))
-        except DocumentLoadError:
-            raise
+        # ── Parse ─────────────────────────────────────────────────────────────
+        try:
+            reader = csv.reader(io.StringIO(text_content), dialect)
+            rows = [r for r in reader if any(cell.strip() for cell in r)]
         except Exception as e:
             raise CorruptDocumentError(f"Cannot parse CSV: {e}") from e
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-
-        if not docs:
-            return "", {"format": "csv", "rows": 0, "columns": 0}
-
-        # LlamaIndex SimpleCSVReader returns row-level Documents
-        # Reconstruct as markdown table for better chunk retrieval
-        import csv
-        import io
-
-        text_content = raw.decode("utf-8")
-        try:
-            import csv as csv_mod
-            dialect = csv_mod.Sniffer().sniff(text_content[:8192], delimiters=",\t;")
-        except csv.Error:
-            import csv as csv_mod
-            dialect = csv_mod.excel
-
-        reader_obj = csv.reader(io.StringIO(text_content), dialect)
-        rows = list(reader_obj)
 
         metadata: Dict[str, Any] = {
             "format": "csv",
-            "loader": "llama_index.SimpleCSVReader",
+            "loader": "stdlib-csv",
             "encoding": detected_encoding,
             "rows": 0,
             "columns": 0,
@@ -105,26 +106,40 @@ class CsvLoader(DocumentLoader):
             return "", metadata
 
         header = rows[0]
+        data_rows = rows[1:]
         num_cols = len(header)
-        num_rows = len(rows) - 1
+        num_rows = len(data_rows)
+
         metadata["rows"] = num_rows
         metadata["columns"] = num_cols
-        metadata["column_names"] = header
-        metadata["row_index"] = list(range(num_rows))  # LlamaIndex-style metadata
+        metadata["column_names"] = [c.strip() for c in header]
 
-        lines = [
-            "| " + " | ".join(str(c) for c in header) + " |",
+        # ── Render as markdown table ───────────────────────────────────────────
+        # Markdown tables are the best format for RAG: each row is human-readable
+        # and chunking preserves the column context in every chunk.
+        lines: List[str] = [
+            "| " + " | ".join(str(c).strip() for c in header) + " |",
             "| " + " | ".join("---" for _ in header) + " |",
         ]
-        display_rows = rows[1:] if num_rows <= MAX_ROWS_PREVIEW else rows[1: MAX_ROWS_PREVIEW + 1]
-        for r in display_rows:
-            padded = (r + [""] * num_cols)[:num_cols]
-            lines.append("| " + " | ".join(str(c) for c in padded) + " |")
+
+        display_rows = data_rows[:MAX_ROWS_PREVIEW]
+        for row in display_rows:
+            # Pad short rows, truncate long rows to match header column count
+            padded = (row + [""] * num_cols)[:num_cols]
+            lines.append("| " + " | ".join(str(c).strip() for c in padded) + " |")
 
         table_text = "\n".join(lines)
+
         if num_rows > MAX_ROWS_PREVIEW:
-            table_text += f"\n\n[... {num_rows - MAX_ROWS_PREVIEW} more rows ...]"
+            omitted = num_rows - MAX_ROWS_PREVIEW
+            table_text += f"\n\n[... {omitted} more rows not shown ...]"
             metadata["preview"] = True
             metadata["rows_shown"] = MAX_ROWS_PREVIEW
 
+        logger.info(
+            "[CsvLoader] Parsed %d rows x %d cols (encoding=%s)",
+            num_rows,
+            num_cols,
+            detected_encoding,
+        )
         return table_text, metadata

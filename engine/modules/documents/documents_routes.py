@@ -26,7 +26,6 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
-
 @router.post("/upload", response_model=DocumentIngestResponse, status_code=202)
 async def upload_document(
     file: UploadFile = File(...),
