@@ -42,3 +42,9 @@ class AssistantResponse(AssistantBase):
 
     class Config:
         from_attributes = True
+
+class ToolInfoResponse(BaseModel):
+    tool_id: str
+    description: str
+    category: str
+    default_instructions: Optional[str] = None

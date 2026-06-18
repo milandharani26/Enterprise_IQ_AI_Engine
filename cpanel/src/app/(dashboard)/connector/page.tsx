@@ -1,80 +1,105 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Calendar, 
-  Fingerprint, 
   HardDrive, 
-  Sparkles, 
   Database, 
-  Bot, 
-  Mail,
   ChevronDown,
   X,
   Plus
 } from 'lucide-react';
-import { useIntegrationStore, Connector } from '@/store/useIntegrationStore';
+import { useConnectorsHooks, Connector } from '@/hooks/api/useConnectors';
+import { useCredentialsHooks, Credential } from '@/hooks/api/useCredentials';
+import { useAppStore } from '@/store/useAppStore';
+
+const UI_META: Record<string, any> = {
+  google_drive: { name: 'Google Drive', provider: 'Google', icon: HardDrive, colorBase: 'blue' },
+  postgres: { name: 'PostgreSQL', provider: 'PostgreSQL', icon: Database, colorBase: 'indigo' },
+};
 
 export default function ConnectorPage() {
-  const { connectors, credentials, updateConnector } = useIntegrationStore();
+  const { activeOrganizationId } = useAppStore();
+  const { useConnectorsQuery, useAddConnectorMutation, useUpdateConnectorMutation } = useConnectorsHooks();
+  const { useCredentialsQuery } = useCredentialsHooks();
+
+  const { data: dbConnectors = [], isLoading: isLoadingConnectors } = useConnectorsQuery(activeOrganizationId);
+  const { data: credentials = [] } = useCredentialsQuery(activeOrganizationId);
+
+  const addConnectorMutation = useAddConnectorMutation();
+  const updateConnectorMutation = useUpdateConnectorMutation();
+
   const [selectedConnector, setSelectedConnector] = useState<Connector | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'connectors' | 'test'>('connectors');
   const [selectedCredentialId, setSelectedCredentialId] = useState<string>('');
 
+  // Sync static Connectors to DB if they don't exist
+  useEffect(() => {
+    if (activeOrganizationId && !isLoadingConnectors && dbConnectors) {
+      Object.entries(UI_META).forEach(([connector_id, meta]) => {
+        if (!dbConnectors.some((c: Connector) => c.connector_id === connector_id)) {
+          addConnectorMutation.mutate({
+            organization_id: activeOrganizationId,
+            connector_id,
+            name: meta.name,
+            provider: meta.provider,
+            status: 'disabled',
+            credential_id: null
+          });
+        }
+      });
+    }
+  }, [activeOrganizationId, isLoadingConnectors, dbConnectors]);
+
   const handleToggle = (connector: Connector) => {
-    if (!connector.enabled) {
-      // Opening modal to configure before enabling
+    if (connector.status === 'disabled') {
       setSelectedConnector(connector);
-      setSelectedCredentialId('');
+      setSelectedCredentialId(connector.credential_id || '');
       setIsModalOpen(true);
     } else {
-      // Disable directly
-      updateConnector(connector.id, { enabled: false, credentialMapped: false, credentialId: undefined });
+      updateConnectorMutation.mutate({
+        id: connector.id,
+        updates: { status: 'disabled', credential_id: null }
+      });
     }
   };
 
   const handleSaveAndEnable = () => {
     if (selectedConnector) {
-      updateConnector(selectedConnector.id, { 
-        enabled: true, 
-        credentialMapped: !!selectedCredentialId,
-        credentialId: selectedCredentialId || undefined
+      updateConnectorMutation.mutate({
+        id: selectedConnector.id,
+        updates: { 
+          status: 'enabled', 
+          credential_id: selectedCredentialId || null
+        }
       });
       setIsModalOpen(false);
       setSelectedConnector(null);
     }
   };
 
-  // Filter credentials matching the selected connector's provider
   const availableCredentials = selectedConnector 
-    ? credentials.filter(c => c.provider.toLowerCase() === selectedConnector.provider.toLowerCase())
+    ? credentials.filter((c: Credential) => c.provider.toLowerCase() === selectedConnector.provider.toLowerCase())
     : [];
 
   const getColorClasses = (colorBase: string) => {
-    const map: Record<string, { bg: string, text: string, shadow: string, border: string }> = {
+    const map: Record<string, any> = {
       blue: { bg: 'bg-blue-500/10 dark:bg-blue-500/20', text: 'text-blue-600 dark:text-blue-400', shadow: 'shadow-blue-500/20', border: 'border-blue-500/20' },
-      purple: { bg: 'bg-purple-500/10 dark:bg-purple-500/20', text: 'text-purple-600 dark:text-purple-400', shadow: 'shadow-purple-500/20', border: 'border-purple-500/20' },
-      orange: { bg: 'bg-orange-500/10 dark:bg-orange-500/20', text: 'text-orange-600 dark:text-orange-400', shadow: 'shadow-orange-500/20', border: 'border-orange-500/20' },
       indigo: { bg: 'bg-indigo-500/10 dark:bg-indigo-500/20', text: 'text-indigo-600 dark:text-indigo-400', shadow: 'shadow-indigo-500/20', border: 'border-indigo-500/20' },
-      cyan: { bg: 'bg-cyan-500/10 dark:bg-cyan-500/20', text: 'text-cyan-600 dark:text-cyan-400', shadow: 'shadow-cyan-500/20', border: 'border-cyan-500/20' },
     };
     return map[colorBase] || map.blue;
   };
 
   return (
     <div className="min-h-full p-4 md:p-8 lg:p-12 relative">
-      
-      {/* Header Section */}
       <div className="mb-10 max-w-6xl mx-auto">
         <h1 className="text-4xl font-extrabold tracking-tight mb-2 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">
           Connectors
         </h1>
         <p className="text-gray-600 dark:text-gray-400 text-lg max-w-2xl leading-relaxed">
-          Enable connectors and bind them to credentials. Turning on always requires selecting a credential.
+          Enable connectors and bind them to credentials.
         </p>
 
-        {/* Tabs */}
         <div className="flex items-center gap-2 mt-8">
           <button 
             onClick={() => setActiveTab('connectors')}
@@ -86,32 +111,28 @@ export default function ConnectorPage() {
           >
             Connectors
           </button>
-          <button 
-            onClick={() => setActiveTab('test')}
-            className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all duration-300 ${
-              activeTab === 'test' 
-                ? 'bg-black dark:bg-white text-white dark:text-gray-900 shadow-xl shadow-black/10 dark:shadow-white/10 scale-105' 
-                : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10'
-            }`}
-          >
-            Test OAuth
-          </button>
         </div>
       </div>
 
-      {/* Grid Section */}
-      {activeTab === 'connectors' && (
+      {!activeOrganizationId ? (
+         <div className="text-center p-8 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 rounded-xl">
+           Please select an Organization first.
+         </div>
+      ) : activeTab === 'connectors' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {connectors.map(connector => {
-            const colors = getColorClasses(connector.colorBase);
-            const Icon = connector.icon;
+          {dbConnectors.map((connector: Connector) => {
+            const meta = UI_META[connector.connector_id] || UI_META['google_drive'];
+            const colors = getColorClasses(meta.colorBase);
+            const Icon = meta.icon;
+            const isEnabled = connector.status === 'enabled';
+            const isMapped = !!connector.credential_id;
             
             return (
               <div 
                 key={connector.id} 
                 className={`group relative p-6 rounded-3xl bg-white/50 dark:bg-[#111113]/50 backdrop-blur-xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${
-                  connector.enabled 
-                    ? `border-${connector.colorBase}-500/30 dark:border-${connector.colorBase}-500/20 shadow-lg ${colors.shadow}` 
+                  isEnabled 
+                    ? `border-${meta.colorBase}-500/30 dark:border-${meta.colorBase}-500/20 shadow-lg ${colors.shadow}` 
                     : 'border-black/10 dark:border-white/10 hover:border-black/20 dark:hover:border-white/20'
                 }`}
               >
@@ -122,19 +143,18 @@ export default function ConnectorPage() {
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900 dark:text-white text-lg">{connector.name}</h3>
-                      <p className="text-gray-500 dark:text-gray-400 text-sm font-mono">{connector.id}</p>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm font-mono">{connector.connector_id}</p>
                     </div>
                   </div>
                   
-                  {/* Custom Toggle Switch */}
                   <button
                     onClick={() => handleToggle(connector)}
                     className={`relative w-12 h-6 rounded-full transition-colors duration-300 shrink-0 ${
-                      connector.enabled ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-700'
+                      isEnabled ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-700'
                     }`}
                   >
                     <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform duration-300 shadow-sm ${
-                      connector.enabled ? 'translate-x-6' : 'translate-x-0'
+                      isEnabled ? 'translate-x-6' : 'translate-x-0'
                     }`} />
                   </button>
                 </div>
@@ -144,16 +164,16 @@ export default function ConnectorPage() {
                     {connector.provider}
                   </span>
                   <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                    connector.enabled 
+                    isEnabled 
                       ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20' 
                       : 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20'
                   }`}>
-                    {connector.enabled ? 'Enabled' : 'Disabled'}
+                    {isEnabled ? 'Enabled' : 'Disabled'}
                   </span>
                 </div>
 
-                <p className={`text-sm ${connector.credentialMapped ? 'text-gray-800 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}`}>
-                  {connector.credentialMapped ? 'Credentials successfully mapped.' : 'No credential mapped yet.'}
+                <p className={`text-sm ${isMapped ? 'text-gray-800 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}`}>
+                  {isMapped ? 'Credentials successfully mapped.' : 'No credential mapped yet.'}
                 </p>
               </div>
             );
@@ -161,7 +181,6 @@ export default function ConnectorPage() {
         </div>
       )}
 
-      {/* Configuration Modal */}
       {isModalOpen && selectedConnector && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-in fade-in">
           <div 
@@ -170,7 +189,6 @@ export default function ConnectorPage() {
           />
           <div className="relative w-full max-w-lg rounded-3xl bg-white dark:bg-[#0f172a] shadow-2xl border border-black/10 dark:border-white/10 overflow-hidden animate-in zoom-in-95 duration-300 slide-in-from-bottom-8">
             <div className="p-6 md:p-8">
-              
               <div className="flex items-center justify-between mb-8">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Enable {selectedConnector.name}</h2>
@@ -191,15 +209,7 @@ export default function ConnectorPage() {
                     type="text" 
                     defaultValue={selectedConnector.name}
                     className="w-full px-4 py-3 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-black/20 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-shadow"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description</label>
-                  <textarea 
-                    placeholder="Optional details for admins"
-                    rows={3}
-                    className="w-full px-4 py-3 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-black/20 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-shadow resize-none placeholder:text-gray-400 dark:placeholder:text-gray-600"
+                    readOnly
                   />
                 </div>
 
@@ -212,7 +222,7 @@ export default function ConnectorPage() {
                       className="w-full px-4 py-3 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-black/20 text-gray-900 dark:text-white appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-shadow"
                     >
                       <option value="">Select credential...</option>
-                      {availableCredentials.map(cred => (
+                      {availableCredentials.map((cred: Credential) => (
                         <option key={cred.id} value={cred.id}>{cred.name} ({cred.status})</option>
                       ))}
                     </select>
@@ -225,9 +235,9 @@ export default function ConnectorPage() {
                   )}
                 </div>
 
-                <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-900 dark:text-white transition-colors text-sm font-medium">
-                  <Plus className="w-4 h-4" /> Add New Credential
-                </button>
+                <a href="/credentials" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-900 dark:text-white transition-colors text-sm font-medium">
+                  <Plus className="w-4 h-4" /> Go to Credentials
+                </a>
               </div>
             </div>
 
@@ -240,7 +250,8 @@ export default function ConnectorPage() {
               </button>
               <button 
                 onClick={handleSaveAndEnable}
-                className="px-6 py-2.5 rounded-xl font-medium bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5"
+                disabled={!selectedCredentialId}
+                className="px-6 py-2.5 rounded-xl font-medium bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 disabled:opacity-50"
               >
                 Save and Enable
               </button>

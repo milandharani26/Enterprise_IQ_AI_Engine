@@ -22,37 +22,46 @@ SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 class GoogleDriveClient:
     """Wrapper for the Google Drive API v3."""
 
-    def __init__(self, token_path: str = "token.json"):
+    def __init__(self, token_path: str = "token.json", auth_data: dict = None):
         self.settings = get_settings()
         self.token_path = token_path
+        self.auth_data = auth_data
         self.creds = None
         self.service = None
         self._authenticate()
 
     def _authenticate(self):
-        """Load tokens from local token.json or initiate flow if missing."""
-        if os.path.exists(self.token_path):
+        """Load tokens from auth_data dict or local token.json."""
+        if self.auth_data:
+            try:
+                # If the DB stored the exact token.json content
+                if 'json_content' in self.auth_data:
+                    self.creds = Credentials.from_authorized_user_info(self.auth_data['json_content'], SCOPES)
+                else:
+                    self.creds = Credentials.from_authorized_user_info(self.auth_data, SCOPES)
+            except Exception as e:
+                logger.warning(f"Failed to load credentials from auth_data: {e}")
+        elif os.path.exists(self.token_path):
             try:
                 self.creds = Credentials.from_authorized_user_file(self.token_path, SCOPES)
             except Exception as e:
                 logger.warning(f"Failed to load token.json: {e}")
 
-        # If there are no (valid) credentials available, let the user log in.
-        # However, typically the server won't be able to run InstalledAppFlow interactively.
-        # That's why the local auth script should be run first.
+        # If there are no (valid) credentials available
         if not self.creds or not self.creds.valid:
             if self.creds and self.creds.expired and self.creds.refresh_token:
                 try:
                     self.creds.refresh(Request())
-                    with open(self.token_path, 'w') as token:
-                        token.write(self.creds.to_json())
+                    # We won't try to write back to token_path if we used auth_data
+                    if not self.auth_data:
+                        with open(self.token_path, 'w') as token:
+                            token.write(self.creds.to_json())
                 except Exception as e:
                     logger.error(f"Failed to refresh Google token: {e}")
                     raise Exception("Google token expired and could not be refreshed. Please re-authenticate.")
             else:
                 raise Exception(
-                    "No valid Google credentials found. Please run scripts/auth_google_drive.py first "
-                    "to generate the token.json file."
+                    "No valid Google credentials found. Please provide valid auth_data or token.json."
                 )
 
         self.service = build('drive', 'v3', credentials=self.creds)
@@ -66,9 +75,15 @@ class GoogleDriveClient:
             # We request relevant fields including id, name, webViewLink, owners, etc.
             fields = "nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, size, owners, modifiedTime, parents)"
             
-            # If no query provided, exclude folders by default
+            # If no query provided, exclude unsupported Google Apps types by default
             if query is None:
-                query = "mimeType != 'application/vnd.google-apps.folder'"
+                query = (
+                    "mimeType != 'application/vnd.google-apps.folder' and "
+                    "mimeType != 'application/vnd.google-apps.shortcut' and "
+                    "mimeType != 'application/vnd.google-apps.form' and "
+                    "mimeType != 'application/vnd.google-apps.site' and "
+                    "mimeType != 'application/vnd.google-apps.map'"
+                )
 
             results = self.service.files().list(
                 q=query,
