@@ -35,3 +35,7 @@ cpanel/out/
 
 # Alembic / Logs
 *.log
+
+
+token.json
+credentials.json
