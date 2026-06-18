@@ -19,12 +19,6 @@ logger = logging.getLogger("engine")
 
 _PUBLIC_DIR = Path(__file__).resolve().parents[1] / "cpanel" / "out"
 
-from engine.pipelines.ingestion.loaders.registry import LoaderRegistry
-from engine.pipelines.ingestion.loaders import register_all_loaders
-
-register_all_loaders()
-print("MIME MAP:", LoaderRegistry.list_loaders())
-
 
 def create_app() -> FastAPI:
     app = FastAPI(
