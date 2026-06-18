@@ -11,33 +11,57 @@ import {
   ShieldCheck,
   Globe
 } from 'lucide-react';
-import { useIntegrationStore } from '@/store/useIntegrationStore';
+import { useCredentialsHooks, Credential } from '@/hooks/api/useCredentials';
+import { useAppStore } from '@/store/useAppStore';
 
 const PROVIDERS = ['Google', 'PostgreSQL'];
 
 export default function CredentialsPage() {
-  const { credentials, addCredential, deleteCredential } = useIntegrationStore();
+  const { activeOrganizationId } = useAppStore();
+  const { useCredentialsQuery, useAddCredentialMutation, useDeleteCredentialMutation, useTestCredentialMutation } = useCredentialsHooks();
+  const { data: credentials = [], isLoading } = useCredentialsQuery(activeOrganizationId);
+
+  const addCredentialMutation = useAddCredentialMutation();
+  const deleteCredentialMutation = useDeleteCredentialMutation();
+  const testCredentialMutation = useTestCredentialMutation();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modal State
   const [provider, setProvider] = useState('');
   const [name, setName] = useState('');
+  
+  // Auth Data State
+  const [authData, setAuthData] = useState<Record<string, any>>({});
 
-  const filteredCredentials = credentials.filter(c =>
+  const filteredCredentials = credentials.filter((c: Credential) =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.provider.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleCreate = () => {
-    if (name && provider) {
-      addCredential({
+    if (name && provider && activeOrganizationId) {
+      addCredentialMutation.mutate({
+        organization_id: activeOrganizationId,
         name,
         provider,
+        auth_data: authData,
       });
       setIsModalOpen(false);
       setName('');
       setProvider('');
+      setAuthData({});
+    }
+  };
+
+  const updateAuthData = (key: string, value: any) => {
+    setAuthData(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleTestConnection = () => {
+    if (provider && Object.keys(authData).length > 0) {
+      testCredentialMutation.mutate({ provider, auth_data: authData });
     }
   };
 
@@ -58,108 +82,119 @@ export default function CredentialsPage() {
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors shadow-sm"
+            disabled={!activeOrganizationId}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors shadow-sm disabled:opacity-50"
           >
             <Plus className="w-4 h-4" /> Add Credential
           </button>
         </div>
 
-        {/* Filters Section */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search credentials..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
-            />
+        {!activeOrganizationId ? (
+          <div className="text-center p-8 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 rounded-xl">
+             Please select an Organization first.
           </div>
-          <div className="w-full md:w-48 relative">
-            <select className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white appearance-none focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow">
-              <option value="all">All Types</option>
-              {PROVIDERS.map(p => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          </div>
-        </div>
-
-        {/* Credentials List */}
-        <div className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-5 flex justify-between items-center border-b border-gray-100 dark:border-white/5">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-gray-400" />
-              Credential List
-            </h2>
-            <span className="text-xs font-medium text-gray-500 bg-gray-100 dark:bg-white/10 px-2.5 py-1 rounded-full">
-              {filteredCredentials.length} total
-            </span>
-          </div>
-
-          <div className="flex-1 p-0 overflow-x-auto">
-            {filteredCredentials.length > 0 ? (
-              <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead>
-                  <tr className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-100 dark:border-white/5">
-                    <th className="px-5 py-3 font-medium text-gray-500 dark:text-gray-400">Credential Name</th>
-                    <th className="px-5 py-3 font-medium text-gray-500 dark:text-gray-400">Provider</th>
-                    <th className="px-5 py-3 font-medium text-gray-500 dark:text-gray-400">Status</th>
-                    <th className="px-5 py-3 font-medium text-gray-500 dark:text-gray-400">Last Used</th>
-                    <th className="px-5 py-3 font-medium text-gray-500 dark:text-gray-400 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                  {filteredCredentials.map(cred => (
-                    <tr key={cred.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <span className="font-medium text-gray-900 dark:text-white">{cred.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300 border border-gray-200 dark:border-white/5">
-                          <Globe className="w-3 h-3" />
-                          {cred.provider}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
-                          <ShieldCheck className="w-3 h-3" />
-                          {cred.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">
-                        {cred.lastUsed ? cred.lastUsed.toLocaleDateString() : 'Never'}
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
-                        <button
-                          onClick={() => deleteCredential(cred.id)}
-                          className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-                          title="Delete Credential"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="px-5 py-12 flex flex-col items-center justify-center text-center">
-                <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center mb-4 border border-gray-100 dark:border-white/5">
-                  <KeyRound className="w-6 h-6 text-gray-400" />
-                </div>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">No credentials found</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm">
-                  You haven't added any external credentials yet. Click the button above to securely add your first credential.
-                </p>
+        ) : (
+          <>
+            {/* Filters Section */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search credentials..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
+                />
               </div>
-            )}
-          </div>
-        </div>
+              <div className="w-full md:w-48 relative">
+                <select className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white appearance-none focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow">
+                  <option value="all">All Types</option>
+                  {PROVIDERS.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Credentials List */}
+            <div className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
+              <div className="p-5 flex justify-between items-center border-b border-gray-100 dark:border-white/5">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-gray-400" />
+                  Credential List
+                </h2>
+                <span className="text-xs font-medium text-gray-500 bg-gray-100 dark:bg-white/10 px-2.5 py-1 rounded-full">
+                  {filteredCredentials.length} total
+                </span>
+              </div>
+
+              <div className="flex-1 p-0 overflow-x-auto">
+                {isLoading ? (
+                  <div className="px-5 py-12 flex items-center justify-center text-gray-500">Loading credentials...</div>
+                ) : filteredCredentials.length > 0 ? (
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead>
+                      <tr className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-100 dark:border-white/5">
+                        <th className="px-5 py-3 font-medium text-gray-500 dark:text-gray-400">Credential Name</th>
+                        <th className="px-5 py-3 font-medium text-gray-500 dark:text-gray-400">Provider</th>
+                        <th className="px-5 py-3 font-medium text-gray-500 dark:text-gray-400">Status</th>
+                        <th className="px-5 py-3 font-medium text-gray-500 dark:text-gray-400">Last Used</th>
+                        <th className="px-5 py-3 font-medium text-gray-500 dark:text-gray-400 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                      {filteredCredentials.map((cred: Credential) => (
+                        <tr key={cred.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <span className="font-medium text-gray-900 dark:text-white">{cred.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300 border border-gray-200 dark:border-white/5">
+                              <Globe className="w-3 h-3" />
+                              {cred.provider}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+                              <ShieldCheck className="w-3 h-3" />
+                              {cred.status}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">
+                            {cred.last_used_at ? new Date(cred.last_used_at).toLocaleDateString() : 'Never'}
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <button
+                              onClick={() => deleteCredentialMutation.mutate(cred.id)}
+                              className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                              title="Delete Credential"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="px-5 py-12 flex flex-col items-center justify-center text-center">
+                    <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center mb-4 border border-gray-100 dark:border-white/5">
+                      <KeyRound className="w-6 h-6 text-gray-400" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">No credentials found</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm">
+                      You haven't added any external credentials yet. Click the button above to securely add your first credential.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Add Credential Modal */}
         {isModalOpen && (
@@ -215,16 +250,19 @@ export default function CredentialsPage() {
                   {provider === 'Google' && (
                     <>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Client ID *</label>
-                        <input type="text" placeholder="Google OAuth client ID." className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Client Secret *</label>
-                        <input type="password" placeholder="Google OAuth client secret." className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Redirect URI *</label>
-                        <input type="text" defaultValue="{{CRD_CALLBACK_URL}}/google" readOnly className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-gray-400 focus:outline-none text-sm cursor-not-allowed" />
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">JSON Key file contents OR Raw JSON Tokens</label>
+                        <textarea 
+                          placeholder="{...}" 
+                          rows={6}
+                          onChange={(e) => {
+                            try {
+                              updateAuthData('json_content', JSON.parse(e.target.value));
+                            } catch {
+                              updateAuthData('raw', e.target.value);
+                            }
+                          }}
+                          className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow font-mono" 
+                        />
                       </div>
                     </>
                   )}
@@ -233,39 +271,28 @@ export default function CredentialsPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Host *</label>
-                        <input type="text" placeholder="localhost" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input type="text" onChange={(e) => updateAuthData('host', e.target.value)} placeholder="localhost" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Port *</label>
-                        <input type="text" placeholder="5432" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input type="text" onChange={(e) => updateAuthData('port', e.target.value)} placeholder="5432" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Username *</label>
-                        <input type="text" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input type="text" onChange={(e) => updateAuthData('username', e.target.value)} className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Password *</label>
-                        <input type="password" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input type="password" onChange={(e) => updateAuthData('password', e.target.value)} className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Database *</label>
-                        <input type="text" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input type="text" onChange={(e) => updateAuthData('database', e.target.value)} className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Schema</label>
-                        <input type="text" placeholder="public" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input type="text" onChange={(e) => updateAuthData('schema', e.target.value)} placeholder="public" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
-                    </div>
-                  )}
-
-                  {provider !== 'Google' && provider !== 'PostgreSQL' && provider !== '' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">API Key / Secret</label>
-                      <input
-                        type="password"
-                        placeholder="••••••••••••••••••••••••"
-                        className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
-                      />
                     </div>
                   )}
                 </div>
@@ -274,9 +301,11 @@ export default function CredentialsPage() {
               <div className="px-6 py-4 bg-gray-50/80 dark:bg-white/5 border-t border-gray-200 dark:border-white/10 flex items-center justify-between">
                 <button
                   type="button"
-                  className="px-4 py-2 text-sm rounded-lg font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
+                  onClick={handleTestConnection}
+                  disabled={!provider || Object.keys(authData).length === 0 || testCredentialMutation.isPending}
+                  className="px-4 py-2 text-sm rounded-lg font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors disabled:opacity-50"
                 >
-                  Test Connection
+                  {testCredentialMutation.isPending ? 'Testing...' : 'Test Connection'}
                 </button>
                 <div className="flex items-center gap-2">
                   <button

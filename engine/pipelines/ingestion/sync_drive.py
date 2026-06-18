@@ -182,22 +182,49 @@ async def ingest_drive_file(
                 pass
 
 
-async def sync_drive_files(workspace_id: UUID, query: str = None, limit: int = 50) -> None:
-    """Fetch files from Drive and orchestrate ingestion pipeline."""
+async def sync_drive_files(query: str = None, limit: int = 50) -> int:
+    """Fetch files from Drive for all active connectors and orchestrate ingestion pipeline."""
     try:
-        drive_client = GoogleDriveClient()
-        files = drive_client.list_files(query=query, page_size=limit)
-        
-        if not files:
-            logger.info("No files found in Google Drive matching query.")
-            return
+        from engine.shared.models.connector_model import Connector
+        from engine.shared.models.credential_model import Credential
+        from sqlalchemy import select
 
         async with AsyncSessionLocal() as db:
+            # 1. Find all active connectors for google_drive
+            result = await db.execute(
+                select(Connector, Credential)
+                .join(Credential, Connector.credential_id == Credential.id)
+                .where(Connector.connector_id == 'google_drive', Connector.status == 'enabled')
+            )
+            active_connectors = result.all()
+
+            if not active_connectors:
+                logger.info("No active Google Drive connectors found.")
+                return 0
+
             service = DriveDocumentService(db)
-            
-            # Process files sequentially for stability (can be changed to asyncio.gather)
-            for f in files:
-                await ingest_drive_file(f, workspace_id, drive_client, service)
+
+            # 2. Loop through each active organization/connector
+            for connector, credential in active_connectors:
+                logger.info(f"Syncing Google Drive for Organization: {connector.organization_id}")
                 
+                try:
+                    drive_client = GoogleDriveClient(auth_data=credential.auth_data)
+                    files = drive_client.list_files(query=query, page_size=limit)
+                    
+                    if not files:
+                        logger.info(f"No files found in Google Drive for Org {connector.organization_id}")
+                        continue
+
+                    # 3. Process files for this organization
+                    for f in files:
+                        await ingest_drive_file(f, connector.organization_id, drive_client, service)
+                        
+                except Exception as e:
+                    logger.error(f"Failed to sync for org {connector.organization_id}: {e}")
+
+            return len(active_connectors)
+
     except Exception as e:
         logger.error(f"Failed to sync Google Drive files: {e}")
+        return 0
