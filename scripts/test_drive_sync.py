@@ -7,7 +7,7 @@ This script triggers the background sync manually for testing purposes.
 import os
 import sys
 import asyncio
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,9 +25,8 @@ async def main():
         print("Please run `python scripts/auth_google_drive.py` first to authenticate.")
         sys.exit(1)
 
-    # For testing, we'll generate a random workspace_id.
-    # In production, this would be an actual organization ID.
-    test_workspace_id = uuid4()
+    # The user requested to sync all documents to this specific organization for testing:
+    test_workspace_id = UUID("32a1abfd-c59a-4d50-ac2c-e9da38c7de73")
     
     # Number of seconds to wait between syncs (e.g., 3600 = 1 hour)
     sync_interval_seconds = 60 * 5  # Default: 5 minutes

@@ -66,9 +66,15 @@ class GoogleDriveClient:
             # We request relevant fields including id, name, webViewLink, owners, etc.
             fields = "nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, size, owners, modifiedTime, parents)"
             
-            # If no query provided, exclude folders by default
+            # If no query provided, exclude unsupported Google Apps types by default
             if query is None:
-                query = "mimeType != 'application/vnd.google-apps.folder'"
+                query = (
+                    "mimeType != 'application/vnd.google-apps.folder' and "
+                    "mimeType != 'application/vnd.google-apps.shortcut' and "
+                    "mimeType != 'application/vnd.google-apps.form' and "
+                    "mimeType != 'application/vnd.google-apps.site' and "
+                    "mimeType != 'application/vnd.google-apps.map'"
+                )
 
             results = self.service.files().list(
                 q=query,

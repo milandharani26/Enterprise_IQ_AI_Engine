@@ -49,9 +49,40 @@ async def ingest_drive_file(
     """Download, chunk, embed, and save a single drive file."""
     doc_id = None
     try:
+        from datetime import datetime
+        from sqlalchemy import select, and_
+        from engine.shared.models.drive_document_model import DriveDocument
+        
         drive_file_id = file_info.get("id")
         title = file_info.get("name", "Untitled")
         mime_type = file_info.get("mimeType", "")
+        
+        last_modified_str = file_info.get("modifiedTime")
+        last_modified_dt = None
+        if last_modified_str:
+            try:
+                # Parse and strip timezone to avoid asyncpg naive/aware mismatch
+                parsed = datetime.fromisoformat(last_modified_str.replace('Z', '+00:00'))
+                last_modified_dt = parsed.replace(tzinfo=None)
+            except:
+                pass
+
+        # Check if we can skip processing
+        existing = (
+            await service.db.execute(
+                select(DriveDocument).where(
+                    and_(
+                        DriveDocument.workspace_id == workspace_id,
+                        DriveDocument.drive_file_id == drive_file_id,
+                    )
+                )
+            )
+        ).scalars().first()
+
+        if existing and existing.last_modified_in_drive and last_modified_dt:
+            if existing.last_modified_in_drive.timestamp() == last_modified_dt.timestamp() and existing.status == "indexed":
+                logger.info(f"[Drive Sync] Skipping '{title}' - hasn't changed since last sync.")
+                return
 
         # 1. Register Document as Processing
         owners = file_info.get("owners", [])
@@ -64,7 +95,8 @@ async def ingest_drive_file(
             web_view_link=file_info.get("webViewLink"),
             web_content_link=file_info.get("webContentLink"),
             owner_email=owner_email,
-            file_size_bytes=int(file_info.get("size", 0)) if file_info.get("size") else None
+            file_size_bytes=int(file_info.get("size", 0)) if file_info.get("size") else None,
+            last_modified_in_drive=last_modified_dt
         )
         
         doc = await service.create_drive_document(ingest_req, workspace_id)

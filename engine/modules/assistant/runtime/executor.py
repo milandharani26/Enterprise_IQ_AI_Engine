@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 from typing import List, Tuple
 
 from langchain_core.messages import AIMessage, ToolMessage
@@ -15,12 +16,25 @@ from engine.modules.assistant.runtime.rag_context import (
     enrich_config_for_rag,
     fetch_indexed_document_inventory,
 )
+from engine.modules.assistant.runtime.drive_context import (
+    assistant_has_drive_tool,
+    enrich_config_for_drive,
+    fetch_drive_document_inventory,
+)
 from engine.modules.assistant.tools.base_tool import ToolContext
 
 logger = logging.getLogger(__name__)
 
 # Ensure assistant types are registered even if startup hook did not run yet.
 AssistantFactory.register_types()
+
+
+def _fix_markdown_links(text: str) -> str:
+    """Fixes broken markdown links where LLMs insert newlines between brackets and parens."""
+    if not text or not isinstance(text, str):
+        return text
+    # Match any whitespace (space, newline, etc) between ] and (
+    return re.sub(r'\]\s+\(\s*(https?://)', r'](\1', text)
 
 
 def _extract_response_text(result: dict) -> str:
@@ -44,7 +58,7 @@ def _extract_response_text(result: dict) -> str:
         else:
             text = str(content or "").strip()
         if text:
-            return text
+            return _fix_markdown_links(text)
 
     # emit_ui_blocks returns JSON in a ToolMessage
     for msg in reversed(messages):
@@ -53,7 +67,7 @@ def _extract_response_text(result: dict) -> str:
                 parsed = json.loads(msg.content or "")
                 for block in parsed.get("blocks") or []:
                     if block.get("type") == "markdown" and block.get("data", {}).get("content"):
-                        return block["data"]["content"]
+                        return _fix_markdown_links(block["data"]["content"])
             except (json.JSONDecodeError, TypeError):
                 pass
 
@@ -69,6 +83,9 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
                 parsed = json.loads(msg.content or "")
                 blocks = parsed.get("blocks")
                 if blocks:
+                    for b in blocks:
+                        if b.get("type") == "markdown" and "content" in b.get("data", {}):
+                            b["data"]["content"] = _fix_markdown_links(b["data"]["content"])
                     return blocks
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -82,6 +99,9 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
                 args = call.get("args") or {}
                 blocks = args.get("blocks")
                 if blocks:
+                    for b in blocks:
+                        if b.get("type") == "markdown" and "content" in b.get("data", {}):
+                            b["data"]["content"] = _fix_markdown_links(b["data"]["content"])
                     return blocks
 
     for msg in reversed(messages):
@@ -90,7 +110,11 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
             try:
                 parsed = json.loads(content)
                 if isinstance(parsed, dict) and parsed.get("blocks"):
-                    return parsed["blocks"]
+                    blocks = parsed["blocks"]
+                    for b in blocks:
+                        if b.get("type") == "markdown" and "content" in b.get("data", {}):
+                            b["data"]["content"] = _fix_markdown_links(b["data"]["content"])
+                    return blocks
             except json.JSONDecodeError:
                 pass
 
@@ -120,6 +144,10 @@ class AssistantExecutor:
         if assistant_has_rag_tool(config_dict):
             inventory = await fetch_indexed_document_inventory(organization_id)
             config_dict = enrich_config_for_rag(config_dict, inventory)
+
+        if assistant_has_drive_tool(config_dict):
+            drive_inventory = await fetch_drive_document_inventory(organization_id)
+            config_dict = enrich_config_for_drive(config_dict, drive_inventory)
 
         assistant_instance = AssistantFactory.get_assistant(config=config_dict)
         agent, _system_instruction, _tools = assistant_instance.build_graph(
