@@ -7,6 +7,7 @@ from engine.modules.conversation import conversation_router
 from engine.modules.organization import organization_router
 from engine.modules.documents import router as documents_router
 from engine.modules.drive_documents import router as drive_documents_router
+from engine.modules.database_connector.database_connector_routes import router as db_connector_router
 
 router = APIRouter()
 
@@ -24,3 +25,4 @@ router.include_router(documents_router)
 router.include_router(drive_documents_router)
 router.include_router(credentials_router, prefix="/credentials", tags=["credentials"])
 router.include_router(connectors_router, prefix="/connectors", tags=["connectors"])
+router.include_router(db_connector_router)

@@ -12,6 +12,7 @@ from engine.modules.assistant.tools.base_tool import BaseTool, ToolContext
 from engine.modules.assistant.tools.tool_registry import ToolRegistryNew
 from engine.modules.assistant.runtime.rag_context import RAG_WORKFLOW_INSTRUCTIONS
 from engine.modules.assistant.runtime.drive_context import DRIVE_WORKFLOW_INSTRUCTIONS
+from engine.modules.assistant.runtime.sql_context import SQL_WORKFLOW_INSTRUCTIONS
 from engine.modules.assistant.tools.exceptions import LLMInitializationError
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ class SimpleReactiveType:
     def _get_tools(self, tools_config: List[Dict[str, Any]] = None) -> List[BaseTool]:
         tools: List[BaseTool] = []
         for t in tools_config or []:
-            tool_id = t.get("tool_id") or t.get("id")
+            tool_id = t.get("id") or t.get("tool_id")
             if isinstance(t, dict) and tool_id:
                 tool_class = ToolRegistryNew.get_tool(tool_id)
                 if tool_class:
@@ -59,6 +60,8 @@ class SimpleReactiveType:
             workflow += RAG_WORKFLOW_INSTRUCTIONS
         if any(t.name == "drive_search" for t in tools):
             workflow += DRIVE_WORKFLOW_INSTRUCTIONS
+        if any(t.name == "sql_query" for t in tools):
+            workflow += SQL_WORKFLOW_INSTRUCTIONS
         
         if not workflow:
             workflow = (
@@ -89,8 +92,8 @@ class SimpleReactiveType:
         )
         return agent, system_instruction, langchain_tools
 
-    def invoke(self, agent, query: str, session_id: str):
-        return agent.invoke(
+    async def invoke(self, agent, query: str, session_id: str):
+        return await agent.ainvoke(
             {"messages": [HumanMessage(content=query)]},
             config={"configurable": {"thread_id": session_id}},
         )

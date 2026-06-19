@@ -13,8 +13,7 @@ import {
 } from 'lucide-react';
 import { useCredentialsHooks, Credential } from '@/hooks/api/useCredentials';
 import { useAppStore } from '@/store/useAppStore';
-
-const PROVIDERS = ['Google', 'PostgreSQL'];
+const PROVIDERS = ['Google', 'PostgreSQL', 'MySQL'];
 
 export default function CredentialsPage() {
   const { activeOrganizationId } = useAppStore();
@@ -31,27 +30,57 @@ export default function CredentialsPage() {
   // Modal State
   const [provider, setProvider] = useState('');
   const [name, setName] = useState('');
-  
+
   // Auth Data State
   const [authData, setAuthData] = useState<Record<string, any>>({});
 
-  const filteredCredentials = credentials.filter((c: Credential) =>
+  // Database State
+  const [dbHost, setDbHost] = useState('');
+  const [dbPort, setDbPort] = useState('5432');
+  const [dbUser, setDbUser] = useState('');
+  const [dbPass, setDbPass] = useState('');
+  const [dbName, setDbName] = useState('');
+  const [dbSchema, setDbSchema] = useState('');
+
+  const filteredCredentials = (credentials || []).filter((c: Credential) =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.provider.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (name && provider && activeOrganizationId) {
-      addCredentialMutation.mutate({
-        organization_id: activeOrganizationId,
-        name,
-        provider,
-        auth_data: authData,
-      });
+      if (provider === 'PostgreSQL' || provider === 'MySQL') {
+        addCredentialMutation.mutate({
+          organization_id: activeOrganizationId,
+          name,
+          provider,
+          auth_data: {
+            host: dbHost,
+            port: parseInt(dbPort),
+            username: dbUser,
+            password: dbPass,
+            database: dbName,
+            schema: dbSchema || null
+          },
+        });
+      } else {
+        addCredentialMutation.mutate({
+          organization_id: activeOrganizationId,
+          name,
+          provider,
+          auth_data: authData,
+        });
+      }
       setIsModalOpen(false);
       setName('');
       setProvider('');
       setAuthData({});
+      setDbHost('');
+      setDbPort('5432');
+      setDbUser('');
+      setDbPass('');
+      setDbName('');
+      setDbSchema('');
     }
   };
 
@@ -60,15 +89,27 @@ export default function CredentialsPage() {
   };
 
   const handleTestConnection = () => {
-    if (provider && Object.keys(authData).length > 0) {
-      testCredentialMutation.mutate({ provider, auth_data: authData });
+    let payloadAuthData = authData;
+    if (provider === 'PostgreSQL' || provider === 'MySQL') {
+      payloadAuthData = {
+        host: dbHost,
+        port: parseInt(dbPort),
+        username: dbUser,
+        password: dbPass,
+        database: dbName,
+        schema: dbSchema || null
+      };
+    }
+
+    if (provider && Object.keys(payloadAuthData).length > 0) {
+      testCredentialMutation.mutate({ provider, auth_data: payloadAuthData });
     }
   };
 
   return (
     <div className="min-h-full p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-8">
-        
+
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-gray-200 dark:border-white/10 pb-6">
           <div>
@@ -91,7 +132,7 @@ export default function CredentialsPage() {
 
         {!activeOrganizationId ? (
           <div className="text-center p-8 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 rounded-xl">
-             Please select an Organization first.
+            Please select an Organization first.
           </div>
         ) : (
           <>
@@ -251,8 +292,8 @@ export default function CredentialsPage() {
                     <>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">JSON Key file contents OR Raw JSON Tokens</label>
-                        <textarea 
-                          placeholder="{...}" 
+                        <textarea
+                          placeholder="{...}"
                           rows={6}
                           onChange={(e) => {
                             try {
@@ -261,38 +302,49 @@ export default function CredentialsPage() {
                               updateAuthData('raw', e.target.value);
                             }
                           }}
-                          className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow font-mono" 
+                          className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow font-mono"
                         />
                       </div>
                     </>
                   )}
 
-                  {provider === 'PostgreSQL' && (
+                  {(provider === 'PostgreSQL' || provider === 'MySQL') && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Host *</label>
-                        <input type="text" onChange={(e) => updateAuthData('host', e.target.value)} placeholder="localhost" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input value={dbHost} onChange={(e) => setDbHost(e.target.value)} type="text" placeholder="localhost" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Port *</label>
-                        <input type="text" onChange={(e) => updateAuthData('port', e.target.value)} placeholder="5432" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input value={dbPort} onChange={(e) => setDbPort(e.target.value)} type="text" placeholder="5432" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Username *</label>
-                        <input type="text" onChange={(e) => updateAuthData('username', e.target.value)} className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input value={dbUser} onChange={(e) => setDbUser(e.target.value)} type="text" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Password *</label>
-                        <input type="password" onChange={(e) => updateAuthData('password', e.target.value)} className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input value={dbPass} onChange={(e) => setDbPass(e.target.value)} type="password" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Database *</label>
-                        <input type="text" onChange={(e) => updateAuthData('database', e.target.value)} className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input value={dbName} onChange={(e) => setDbName(e.target.value)} type="text" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Schema</label>
-                        <input type="text" onChange={(e) => updateAuthData('schema', e.target.value)} placeholder="public" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input value={dbSchema} onChange={(e) => setDbSchema(e.target.value)} type="text" placeholder="public" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
+                    </div>
+                  )}
+
+                  {provider !== 'Google' && provider !== 'PostgreSQL' && provider !== 'MySQL' && provider !== '' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">API Key / Secret</label>
+                      <input
+                        type="password"
+                        placeholder="••••••••••••••••••••••••"
+                        className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
+                      />
                     </div>
                   )}
                 </div>
@@ -302,7 +354,7 @@ export default function CredentialsPage() {
                 <button
                   type="button"
                   onClick={handleTestConnection}
-                  disabled={!provider || Object.keys(authData).length === 0 || testCredentialMutation.isPending}
+                  disabled={!provider || testCredentialMutation.isPending}
                   className="px-4 py-2 text-sm rounded-lg font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors disabled:opacity-50"
                 >
                   {testCredentialMutation.isPending ? 'Testing...' : 'Test Connection'}

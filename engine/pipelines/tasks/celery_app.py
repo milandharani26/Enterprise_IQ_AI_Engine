@@ -16,7 +16,10 @@ celery_app = Celery(
     "engine",
     broker=broker_url,
     backend=result_backend,
-    include=["engine.pipelines.ingestion.celery_tasks"],
+    include=[
+        "engine.pipelines.ingestion.celery_tasks",
+        "engine.modules.database_connector.tasks"
+    ],
 )
 
 celery_app.conf.update(

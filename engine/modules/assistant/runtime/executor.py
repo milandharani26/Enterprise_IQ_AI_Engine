@@ -21,6 +21,10 @@ from engine.modules.assistant.runtime.drive_context import (
     enrich_config_for_drive,
     fetch_drive_document_inventory,
 )
+from engine.modules.assistant.runtime.sql_context import (
+    assistant_has_sql_tool,
+    enrich_config_for_sql,
+)
 from engine.modules.assistant.tools.base_tool import ToolContext
 
 logger = logging.getLogger(__name__)
@@ -62,7 +66,10 @@ def _extract_response_text(result: dict) -> str:
 
     # emit_ui_blocks returns JSON in a ToolMessage
     for msg in reversed(messages):
-        if isinstance(msg, ToolMessage) and getattr(msg, "name", "") == "emit_ui_blocks":
+        if (
+            isinstance(msg, ToolMessage)
+            and getattr(msg, "name", "") == "emit_ui_blocks"
+        ):
             try:
                 parsed = json.loads(msg.content or "")
                 for block in parsed.get("blocks") or []:
@@ -78,7 +85,10 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
     messages = result.get("messages") or []
 
     for msg in reversed(messages):
-        if isinstance(msg, ToolMessage) and getattr(msg, "name", "") == "emit_ui_blocks":
+        if (
+            isinstance(msg, ToolMessage)
+            and getattr(msg, "name", "") == "emit_ui_blocks"
+        ):
             try:
                 parsed = json.loads(msg.content or "")
                 blocks = parsed.get("blocks")
@@ -118,7 +128,12 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
             except json.JSONDecodeError:
                 pass
 
-    return [{"type": "markdown", "data": {"content": fallback_text or "No response generated."}}]
+    return [
+        {
+            "type": "markdown",
+            "data": {"content": fallback_text or "No response generated."},
+        }
+    ]
 
 
 class AssistantExecutor:
@@ -133,17 +148,33 @@ class AssistantExecutor:
         assistant: Assistant,
     ) -> Tuple[str, list]:
         organization_id = str(organization_ids[0]) if organization_ids else None
+        config_dict = assistant_row_to_config_dict(assistant)
+        if assistant_has_rag_tool(config_dict):
+            inventory = await fetch_indexed_document_inventory(organization_id)
+            config_dict = enrich_config_for_rag(config_dict, inventory)
+
+        if assistant_has_sql_tool(config_dict):
+            config_dict = enrich_config_for_sql(config_dict)
+
+        # Extract and format guardrails
+        guardrails_list = config_dict.get("guardrails", [])
+        guardrails_str = ""
+        if guardrails_list:
+            guardrails_str = "\n".join(
+                [
+                    f"- {g.get('type')}: {g.get('instructions')}"
+                    for g in guardrails_list
+                    if g.get("is_enabled", True)
+                ]
+            )
+
         context = ToolContext(
             organization_id=organization_id,
             conversation_id=conversation_id,
             assistant_id=assistant_id,
             user_id=user_id,
+            guardrails=guardrails_str,
         )
-
-        config_dict = assistant_row_to_config_dict(assistant)
-        if assistant_has_rag_tool(config_dict):
-            inventory = await fetch_indexed_document_inventory(organization_id)
-            config_dict = enrich_config_for_rag(config_dict, inventory)
 
         if assistant_has_drive_tool(config_dict):
             drive_inventory = await fetch_drive_document_inventory(organization_id)
@@ -154,9 +185,16 @@ class AssistantExecutor:
             config_dict, ctx=context
         )
 
-        result = await asyncio.to_thread(
-            assistant_instance.invoke, agent, query, session_id
-        )
+        try:
+            result = await assistant_instance.invoke(
+                agent,
+                query,
+                session_id,
+            )
+        except Exception as e:
+            logger.exception("AGENT INVOCATION FAILED")
+            raise
+
         response_text = _extract_response_text(result)
         content_blocks = _extract_content_blocks(result, response_text)
         return response_text, content_blocks

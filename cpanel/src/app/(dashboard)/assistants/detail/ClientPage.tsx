@@ -54,7 +54,7 @@ export default function AssistantDetailsClient() {
     guardrails: []
   });
 
-  const [newTool, setNewTool] = useState({ id: 'rag_search', credential: 'none', instructions: '' });
+  const [newTool, setNewTool] = useState({ tool_id: 'rag_search', credential_id: 'none', usage_instructions: '' });
   const [newGuardrail, setNewGuardrail] = useState({ type: '', instructions: '', enforcement: 'block', enabled: true });
 
   useEffect(() => {
@@ -183,7 +183,7 @@ export default function AssistantDetailsClient() {
             </div>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <Button variant="ghost" className="gap-2 text-secondary-text hover:text-primary-text" onClick={handlePreviewPrompt} disabled={previewMutation.isPending}>
             {previewMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <FileCheck size={16} />}
@@ -206,29 +206,29 @@ export default function AssistantDetailsClient() {
 
       {/* Main Unified Layout */}
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden min-h-0 pt-6 gap-8">
-        
+
         {/* Left Column: Configuration (Scrollable) */}
         <div className="w-full lg:w-[450px] xl:w-[500px] flex flex-col gap-10 overflow-y-auto pr-2 pb-10 custom-scrollbar shrink-0">
-          
+
           {/* Section: Basic Identity */}
           <section className="flex flex-col gap-5">
             <div>
               <h2 className="text-sm font-semibold text-primary-text uppercase tracking-wider mb-1">Basic Identity</h2>
               <p className="text-xs text-secondary-text">Core details defining this assistant.</p>
             </div>
-            
+
             <div className="flex flex-col gap-4">
-              <Input 
-                label="Assistant Name" 
-                value={formData.assistant_name} 
-                onChange={e => setFormData({ ...formData, assistant_name: e.target.value })} 
+              <Input
+                label="Assistant Name"
+                value={formData.assistant_name}
+                onChange={e => setFormData({ ...formData, assistant_name: e.target.value })}
               />
               <Input label="Unique Code" value={assistant.assistant_code} disabled />
-              <Textarea 
-                label="Description" 
-                value={formData.description} 
-                onChange={e => setFormData({ ...formData, description: e.target.value })} 
-                className="min-h-[80px]" 
+              <Textarea
+                label="Description"
+                value={formData.description}
+                onChange={e => setFormData({ ...formData, description: e.target.value })}
+                className="min-h-[80px]"
               />
             </div>
           </section>
@@ -237,13 +237,13 @@ export default function AssistantDetailsClient() {
 
           {/* Section: Extensions (Tools & Guardrails) */}
           <section className="flex flex-col gap-5">
-             <div>
+            <div>
               <h2 className="text-sm font-semibold text-primary-text uppercase tracking-wider mb-1">Capabilities & Security</h2>
               <p className="text-xs text-secondary-text">Extend actions and enforce rules.</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div 
+              <div
                 className="flex flex-col items-center justify-center p-6 bg-tertiary-bg border border-dashed border-border-color rounded-2xl hover:border-accent-primary hover:bg-accent-primary/5 cursor-pointer transition-all group"
                 onClick={() => setIsToolModalOpen(true)}
               >
@@ -253,8 +253,8 @@ export default function AssistantDetailsClient() {
                 <span className="text-sm font-medium text-primary-text">Tools ({formData.tools?.length || 0})</span>
                 <span className="text-xs text-muted-text mt-1 text-center">Give the AI skills</span>
               </div>
-              
-              <div 
+
+              <div
                 className="flex flex-col items-center justify-center p-6 bg-tertiary-bg border border-dashed border-border-color rounded-2xl hover:border-accent-success hover:bg-accent-success/5 cursor-pointer transition-all group"
                 onClick={() => setIsGuardrailModalOpen(true)}
               >
@@ -276,18 +276,18 @@ export default function AssistantDetailsClient() {
                         <Blocks size={14} />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-sm font-semibold text-primary-text">{t.id}</span>
-                        <span className="text-xs text-muted-text">{t.credential === 'none' ? 'No Credential' : 'API Key Required'}</span>
+                        <span className="text-sm font-semibold text-primary-text">{t.tool_id || t.id}</span>
+                        <span className="text-xs text-muted-text">{(t.credential_id || t.credential) === 'none' ? 'No Credential' : 'API Key Required'}</span>
                       </div>
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-accent-danger hover:bg-accent-danger/10 hover:text-accent-danger h-8 w-8 p-0" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-accent-danger hover:bg-accent-danger/10 hover:text-accent-danger h-8 w-8 p-0"
                       onClick={() => {
                         const newTools = [...formData.tools];
                         newTools.splice(idx, 1);
-                        setFormData({...formData, tools: newTools});
+                        setFormData({ ...formData, tools: newTools });
                       }}
                     >
                       <Trash2 size={14} />
@@ -311,14 +311,14 @@ export default function AssistantDetailsClient() {
                         <span className="text-xs text-muted-text capitalize">{g.enforcement} • {g.enabled ? 'Enabled' : 'Disabled'}</span>
                       </div>
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-accent-danger hover:bg-accent-danger/10 hover:text-accent-danger h-8 w-8 p-0" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-accent-danger hover:bg-accent-danger/10 hover:text-accent-danger h-8 w-8 p-0"
                       onClick={() => {
                         const newGuardrails = [...formData.guardrails];
                         newGuardrails.splice(idx, 1);
-                        setFormData({...formData, guardrails: newGuardrails});
+                        setFormData({ ...formData, guardrails: newGuardrails });
                       }}
                     >
                       <Trash2 size={14} />
@@ -341,8 +341,8 @@ export default function AssistantDetailsClient() {
               <p className="text-xs text-secondary-text mt-0.5">Define the core personality and behavior.</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="text-xs bg-tertiary-bg" onClick={() => setFormData({...formData, system_prompt: "You are a helpful, extremely strictly bound assistant. Follow instructions to the letter."})}>Strict Template</Button>
-              <Button variant="ghost" size="sm" className="text-xs bg-tertiary-bg" onClick={() => setFormData({...formData, system_prompt: "You are a warm, extremely friendly, and highly empathetic customer support assistant."})}>Friendly Template</Button>
+              <Button variant="ghost" size="sm" className="text-xs bg-tertiary-bg" onClick={() => setFormData({ ...formData, system_prompt: "You are a helpful, extremely strictly bound assistant. Follow instructions to the letter." })}>Strict Template</Button>
+              <Button variant="ghost" size="sm" className="text-xs bg-tertiary-bg" onClick={() => setFormData({ ...formData, system_prompt: "You are a warm, extremely friendly, and highly empathetic customer support assistant." })}>Friendly Template</Button>
               <div className="w-px h-4 bg-border-color mx-1"></div>
               <Button variant="secondary" size="sm" className="gap-2 text-xs" onClick={() => toast('Playground coming soon!')}>
                 <PlayCircle size={14} />
@@ -350,9 +350,9 @@ export default function AssistantDetailsClient() {
               </Button>
             </div>
           </div>
-          
+
           <div className="flex-1 p-0 relative">
-            <textarea 
+            <textarea
               className="absolute inset-0 w-full h-full p-6 bg-transparent border-none text-primary-text font-mono text-sm leading-relaxed resize-none focus:outline-none custom-scrollbar"
               value={formData.system_prompt}
               onChange={e => setFormData({ ...formData, system_prompt: e.target.value })}
@@ -371,41 +371,41 @@ export default function AssistantDetailsClient() {
         maxWidth="max-w-xl"
       >
         <form className="flex flex-col gap-5">
-          <Select 
-            label="Tool ID" 
+          <Select
+            label="Tool ID"
             options={availableTools?.map((t: any) => ({ label: t.tool_id, value: t.tool_id })) || []}
             value={newTool.id}
             onChange={(e) => setNewTool({ ...newTool, id: e.target.value })}
           />
-          <Select 
-            label="Credential" 
+          <Select
+            label="Credential"
             options={[
               { label: 'None', value: 'none' },
               { label: 'API Key', value: 'api_key' },
             ]}
-            value={newTool.credential}
-            onChange={(e) => setNewTool({ ...newTool, credential: e.target.value })}
+            value={newTool.credential_id}
+            onChange={(e) => setNewTool({ ...newTool, credential_id: e.target.value })}
           />
-          <Textarea 
-            label="Usage instructions" 
+          <Textarea
+            label="Usage instructions"
             placeholder="When and how the model should use this tool"
             className="min-h-[100px]"
-            value={newTool.instructions}
-            onChange={(e) => setNewTool({ ...newTool, instructions: e.target.value })}
+            value={newTool.usage_instructions}
+            onChange={(e) => setNewTool({ ...newTool, usage_instructions: e.target.value })}
           />
           <div className="p-3 bg-tertiary-bg border border-border-color rounded-lg flex items-center text-xs text-secondary-text">
-            Additional config is disabled for <code className="mx-1 px-1.5 py-0.5 bg-secondary-bg rounded text-primary-text">{newTool.id}</code>.
+            Additional config is disabled for <code className="mx-1 px-1.5 py-0.5 bg-secondary-bg rounded text-primary-text">{newTool.tool_id}</code>.
           </div>
-          
+
           <div className="flex items-center justify-end gap-3 mt-2 pt-4 border-t border-border-color">
             <Button variant="ghost" type="button" onClick={() => setIsToolModalOpen(false)}>
               Cancel
             </Button>
             <Button variant="primary" type="button" onClick={() => {
               setFormData({ ...formData, tools: [...formData.tools, newTool] });
-              setNewTool({ id: 'rag_search', credential: 'none', instructions: '' });
-              setIsToolModalOpen(false); 
-              toast.success('Tool added to assistant draft. Click Save Changes to apply.'); 
+              setNewTool({ tool_id: 'rag_search', credential_id: 'none', usage_instructions: '' });
+              setIsToolModalOpen(false);
+              toast.success('Tool added to assistant draft. Click Save Changes to apply.');
             }}>
               Add Tool
             </Button>
@@ -421,22 +421,22 @@ export default function AssistantDetailsClient() {
         maxWidth="max-w-xl"
       >
         <form className="flex flex-col gap-5">
-          <Input 
-            label="Type *" 
-            placeholder="e.g. Financial accuracy" 
+          <Input
+            label="Type *"
+            placeholder="e.g. Financial accuracy"
             autoFocus
             value={newGuardrail.type}
             onChange={(e) => setNewGuardrail({ ...newGuardrail, type: e.target.value })}
           />
-          <Textarea 
-            label="Instructions *" 
+          <Textarea
+            label="Instructions *"
             placeholder="Describe what this guardrail should do..."
             className="min-h-[100px]"
             value={newGuardrail.instructions}
             onChange={(e) => setNewGuardrail({ ...newGuardrail, instructions: e.target.value })}
           />
-          <Select 
-            label="Enforcement" 
+          <Select
+            label="Enforcement"
             options={[
               { label: 'Block', value: 'block' },
               { label: 'Warn', value: 'warn' },
@@ -449,9 +449,9 @@ export default function AssistantDetailsClient() {
               <div className="text-sm font-medium text-primary-text">Enabled</div>
               <div className="text-xs text-muted-text mt-0.5">Guardrail is active when enabled</div>
             </div>
-            <Switch 
-              checked={newGuardrail.enabled} 
-              onChange={(e) => setNewGuardrail({ ...newGuardrail, enabled: e.target.checked })} 
+            <Switch
+              checked={newGuardrail.enabled}
+              onChange={(e) => setNewGuardrail({ ...newGuardrail, enabled: e.target.checked })}
             />
           </div>
 
@@ -466,8 +466,8 @@ export default function AssistantDetailsClient() {
               }
               setFormData({ ...formData, guardrails: [...formData.guardrails, newGuardrail] });
               setNewGuardrail({ type: '', instructions: '', enforcement: 'block', enabled: true });
-              setIsGuardrailModalOpen(false); 
-              toast.success('Guardrail added to assistant draft. Click Save Changes to apply.'); 
+              setIsGuardrailModalOpen(false);
+              toast.success('Guardrail added to assistant draft. Click Save Changes to apply.');
             }}>
               Add Guardrail
             </Button>
