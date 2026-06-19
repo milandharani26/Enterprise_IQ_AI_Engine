@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, status
 
 from engine.modules.assistant.assistant_models import Assistant
-from engine.modules.assistant.assistant_schemas import AssistantCreate, AssistantUpdate, AssistantStatusUpdate
+from engine.modules.assistant.assistant_schemas import AssistantCreate, AssistantUpdate, AssistantStatusUpdate, PreviewPromptRequest, PreviewPromptResponse
+from engine.modules.assistant.runtime.assistant_factory import AssistantFactory
+import tiktoken
 
 class AssistantService:
     @staticmethod
@@ -101,3 +103,37 @@ class AssistantService:
         await db.commit()
         await db.refresh(assistant)
         return assistant
+
+    @staticmethod
+    async def preview_prompt(obj_in: PreviewPromptRequest) -> PreviewPromptResponse:
+        try:
+            AssistantFactory.register_types()
+            config_dict = obj_in.model_dump()
+            assistant_instance = AssistantFactory.get_assistant(config_dict)
+            
+            # Use the internal _get_tools to retrieve configured base tools
+            required_tools = assistant_instance._get_tools(config_dict.get("tools") or [])
+            
+            # Get the compiled system instruction
+            system_instruction = assistant_instance.get_system_instruction(config_dict, required_tools)
+            
+            # Count tokens using tiktoken (cl100k_base is standard for GPT-4/3.5)
+            try:
+                encoding = tiktoken.get_encoding("cl100k_base")
+                token_count = len(encoding.encode(system_instruction))
+            except Exception:
+                token_count = 0
+                
+            return PreviewPromptResponse(
+                compiled_prompt=system_instruction,
+                estimated_tokens=token_count,
+                status="valid",
+                warnings=[]
+            )
+        except Exception as e:
+            return PreviewPromptResponse(
+                compiled_prompt="",
+                estimated_tokens=0,
+                status="error",
+                warnings=[str(e)]
+            )
