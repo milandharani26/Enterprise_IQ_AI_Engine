@@ -70,8 +70,8 @@ class SimpleReactiveType:
         )
         return agent, system_instruction, langchain_tools
 
-    def invoke(self, agent, query: str, session_id: str):
-        return agent.invoke(
+    async def invoke(self, agent, query: str, session_id: str):
+        return await agent.ainvoke(
             {"messages": [HumanMessage(content=query)]},
             config={"configurable": {"thread_id": session_id}},
         )

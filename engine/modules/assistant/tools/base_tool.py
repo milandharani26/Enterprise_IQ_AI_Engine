@@ -60,14 +60,22 @@ class BaseTool:
     def _run(self, ctx: ToolContext, **kwargs) -> Any:
         raise NotImplementedError
 
+    async def _arun(self, ctx: ToolContext, **kwargs) -> Any:
+        raise NotImplementedError
+
     def as_langchain_tool(self, ctx: ToolContext) -> StructuredTool:
-        def run(**kwargs) -> str:
+        def run(**kwargs):
             result = self._run(ctx=ctx, **kwargs)
+            return result if isinstance(result, str) else str(result)
+
+        async def arun(**kwargs):
+            result = await self._arun(ctx=ctx, **kwargs)
             return result if isinstance(result, str) else str(result)
 
         return StructuredTool.from_function(
             name=self.name,
             description=self.properties.description,
             func=run,
+            coroutine=arun,
             args_schema=self.properties.input_schema,
         )

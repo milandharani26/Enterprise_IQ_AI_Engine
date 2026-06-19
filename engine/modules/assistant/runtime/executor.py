@@ -112,6 +112,7 @@ class AssistantExecutor:
         organization_ids: List[str],
         assistant: Assistant,
     ) -> Tuple[str, list]:
+        organization_id = str(organization_ids[0]) if organization_ids else None
         config_dict = assistant_row_to_config_dict(assistant)
         if assistant_has_rag_tool(config_dict):
             inventory = await fetch_indexed_document_inventory(organization_id)
@@ -130,7 +131,6 @@ class AssistantExecutor:
                 if g.get("is_enabled", True)
             ])
 
-        organization_id = str(organization_ids[0]) if organization_ids else None
         context = ToolContext(
             organization_id=organization_id,
             conversation_id=conversation_id,
@@ -144,9 +144,11 @@ class AssistantExecutor:
             config_dict, ctx=context
         )
 
-        result = await asyncio.to_thread(
-            assistant_instance.invoke, agent, query, session_id
-        )
+        result = await assistant_instance.invoke(
+    agent,
+    query,
+    session_id,
+)
         response_text = _extract_response_text(result)
         content_blocks = _extract_content_blocks(result, response_text)
         return response_text, content_blocks
