@@ -278,10 +278,10 @@ class SqlQueryTool(BaseTool):
                     error_message=error_msg,
                 )
 
-            db.add(log_entry)
-            await db.commit()
+                db.add(log_entry)
+                await db.commit()
 
-            logger.info("SQL Query Log Saved")
+                logger.info("SQL Query Log Saved")
 
     def _run(self, *args, **kwargs) -> Any:
         raise NotImplementedError("SqlQueryTool only supports async execution.")

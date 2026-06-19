@@ -14,6 +14,7 @@ class ToolCategory(str, Enum):
 
 class ToolContext(BaseModel):
     """Runtime context passed to assistant tools during chat."""
+
     organization_id: Optional[str] = None
     conversation_id: str
     assistant_id: str
@@ -72,10 +73,19 @@ class BaseTool:
             result = await self._arun(ctx=ctx, **kwargs)
             return result if isinstance(result, str) else str(result)
 
-        return StructuredTool.from_function(
+        tool = StructuredTool.from_function(
             name=self.name,
             description=self.properties.description,
             func=run,
             coroutine=arun,
             args_schema=self.properties.input_schema,
         )
+
+        # Fix: remove additionalProperties from schema — unsupported by Claude/Anthropic
+        if hasattr(tool, "args_schema") and tool.args_schema:
+            schema = tool.args_schema.model_json_schema()
+            schema.pop("additionalProperties", None)
+            for prop in schema.get("properties", {}).values():
+                prop.pop("additionalProperties", None)
+
+        return tool

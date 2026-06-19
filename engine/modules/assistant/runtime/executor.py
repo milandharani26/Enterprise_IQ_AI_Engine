@@ -52,11 +52,16 @@ def _extract_response_text(result: dict) -> str:
 
     # emit_ui_blocks returns JSON in a ToolMessage
     for msg in reversed(messages):
-        if isinstance(msg, ToolMessage) and getattr(msg, "name", "") == "emit_ui_blocks":
+        if (
+            isinstance(msg, ToolMessage)
+            and getattr(msg, "name", "") == "emit_ui_blocks"
+        ):
             try:
                 parsed = json.loads(msg.content or "")
                 for block in parsed.get("blocks") or []:
-                    if block.get("type") == "markdown" and block.get("data", {}).get("content"):
+                    if block.get("type") == "markdown" and block.get("data", {}).get(
+                        "content"
+                    ):
                         return block["data"]["content"]
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -68,7 +73,10 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
     messages = result.get("messages") or []
 
     for msg in reversed(messages):
-        if isinstance(msg, ToolMessage) and getattr(msg, "name", "") == "emit_ui_blocks":
+        if (
+            isinstance(msg, ToolMessage)
+            and getattr(msg, "name", "") == "emit_ui_blocks"
+        ):
             try:
                 parsed = json.loads(msg.content or "")
                 blocks = parsed.get("blocks")
@@ -98,7 +106,12 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
             except json.JSONDecodeError:
                 pass
 
-    return [{"type": "markdown", "data": {"content": fallback_text or "No response generated."}}]
+    return [
+        {
+            "type": "markdown",
+            "data": {"content": fallback_text or "No response generated."},
+        }
+    ]
 
 
 class AssistantExecutor:
@@ -125,18 +138,20 @@ class AssistantExecutor:
         guardrails_list = config_dict.get("guardrails", [])
         guardrails_str = ""
         if guardrails_list:
-            guardrails_str = "\n".join([
-                f"- {g.get('type')}: {g.get('instructions')}"
-                for g in guardrails_list
-                if g.get("is_enabled", True)
-            ])
+            guardrails_str = "\n".join(
+                [
+                    f"- {g.get('type')}: {g.get('instructions')}"
+                    for g in guardrails_list
+                    if g.get("is_enabled", True)
+                ]
+            )
 
         context = ToolContext(
             organization_id=organization_id,
             conversation_id=conversation_id,
             assistant_id=assistant_id,
             user_id=user_id,
-            guardrails=guardrails_str
+            guardrails=guardrails_str,
         )
 
         assistant_instance = AssistantFactory.get_assistant(config=config_dict)
@@ -144,11 +159,16 @@ class AssistantExecutor:
             config_dict, ctx=context
         )
 
-        result = await assistant_instance.invoke(
-    agent,
-    query,
-    session_id,
-)
+        try:
+            result = await assistant_instance.invoke(
+                agent,
+                query,
+                session_id,
+            )
+        except Exception as e:
+            logger.exception("AGENT INVOCATION FAILED")
+            raise
+
         response_text = _extract_response_text(result)
         content_blocks = _extract_content_blocks(result, response_text)
         return response_text, content_blocks
