@@ -19,16 +19,26 @@ export default function AssistantDetailsClient() {
   const id = searchParams?.get('id') as string;
   const router = useRouter();
 
-  const { useAssistantQuery, useUpdateAssistantMutation, useDeleteAssistantMutation, useUpdateAssistantStatusMutation, useToolsQuery } = useAssistantsHooks();
+  const { 
+    useAssistantQuery, 
+    useUpdateAssistantMutation, 
+    useDeleteAssistantMutation, 
+    useUpdateAssistantStatusMutation, 
+    useToolsQuery,
+    usePreviewPromptMutation
+  } = useAssistantsHooks();
   const { data: assistant, isLoading } = useAssistantQuery(id);
   const { data: availableTools } = useToolsQuery();
   const updateMutation = useUpdateAssistantMutation();
   const deleteMutation = useDeleteAssistantMutation();
   const statusMutation = useUpdateAssistantStatusMutation();
+  const previewMutation = usePreviewPromptMutation();
 
   const [isToolModalOpen, setIsToolModalOpen] = useState(false);
   const [isGuardrailModalOpen, setIsGuardrailModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewResult, setPreviewResult] = useState<{ compiled_prompt: string; estimated_tokens: number; status: string; warnings: string[] } | null>(null);
 
   const [formData, setFormData] = useState<{
     assistant_name: string;
@@ -103,6 +113,23 @@ export default function AssistantDetailsClient() {
     });
   };
 
+  const handlePreviewPrompt = () => {
+    if (!assistant) return;
+    previewMutation.mutate(
+      {
+        ...assistant,
+        type: assistant.type || 'simple_reactive',
+      },
+      {
+        onSuccess: (data) => {
+          setPreviewResult(data);
+          setIsPreviewModalOpen(true);
+        },
+        onError: () => toast.error('Failed to generate prompt preview.')
+      }
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col h-full items-center justify-center text-secondary-text gap-3">
@@ -158,8 +185,8 @@ export default function AssistantDetailsClient() {
         </div>
         
         <div className="flex items-center gap-3">
-          <Button variant="ghost" className="gap-2 text-secondary-text hover:text-primary-text" onClick={() => toast('Playground coming soon!')}>
-            <FileCheck size={16} />
+          <Button variant="ghost" className="gap-2 text-secondary-text hover:text-primary-text" onClick={handlePreviewPrompt} disabled={previewMutation.isPending}>
+            {previewMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <FileCheck size={16} />}
             Check prompt
           </Button>
           <Button variant="ghost" className="text-accent-danger hover:bg-accent-danger/10 hover:text-accent-danger gap-2" onClick={handleDelete} disabled={deleteMutation.isPending}>
@@ -462,6 +489,57 @@ export default function AssistantDetailsClient() {
             {deleteMutation.isPending ? 'Deleting...' : 'Yes, Delete Assistant'}
           </Button>
         </div>
+      </Modal>
+
+      {/* Preview Prompt Modal */}
+      <Modal
+        isOpen={isPreviewModalOpen}
+        onClose={() => setIsPreviewModalOpen(false)}
+        title="Compiled Prompt Preview"
+        description="This is the exact string sent to the LLM. It includes your system prompt, tool instructions, and context."
+        maxWidth="max-w-5xl"
+      >
+        {previewResult && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-6 p-4 bg-tertiary-bg border border-border-color rounded-xl">
+              <div className="flex flex-col">
+                <span className="text-xs text-secondary-text uppercase tracking-wider font-semibold mb-1">Estimated Tokens</span>
+                <span className="text-xl font-bold text-primary-text">{previewResult.estimated_tokens.toLocaleString()}</span>
+              </div>
+              <div className="w-px h-10 bg-border-color"></div>
+              <div className="flex flex-col">
+                <span className="text-xs text-secondary-text uppercase tracking-wider font-semibold mb-1">Status</span>
+                <div className="flex items-center gap-2">
+                  {previewResult.status === 'valid' ? (
+                    <Badge variant="success" size="sm">Valid</Badge>
+                  ) : (
+                    <Badge variant="outline" size="sm" className="text-accent-danger border-accent-danger/20 bg-accent-danger/10">Error</Badge>
+                  )}
+                </div>
+              </div>
+              
+              {previewResult.warnings && previewResult.warnings.length > 0 && (
+                <>
+                  <div className="w-px h-10 bg-border-color"></div>
+                  <div className="flex flex-col">
+                    <span className="text-xs text-accent-danger uppercase tracking-wider font-semibold mb-1">Warnings</span>
+                    <span className="text-sm font-medium text-accent-danger">{previewResult.warnings[0]}</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="relative bg-card-bg border border-border-color rounded-lg overflow-y-auto max-h-[500px] custom-scrollbar">
+              <pre className="p-4 font-mono text-xs leading-relaxed text-secondary-text whitespace-pre-wrap break-words">
+                {previewResult.compiled_prompt}
+              </pre>
+            </div>
+            
+            <div className="flex justify-end gap-3 mt-2 pt-4 border-t border-border-color">
+              <Button variant="secondary" onClick={() => setIsPreviewModalOpen(false)}>Close</Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
     </div>

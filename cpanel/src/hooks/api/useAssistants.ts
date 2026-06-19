@@ -18,6 +18,13 @@ export interface Assistant {
   updated_at?: string;
 }
 
+export interface PreviewPromptResponse {
+  compiled_prompt: string;
+  estimated_tokens: number;
+  status: string;
+  warnings: string[];
+}
+
 export const assistantKeys = {
   all: ['assistants'] as const,
   lists: () => [...assistantKeys.all, 'list'] as const,
@@ -95,6 +102,13 @@ export const useAssistantsHooks = () => {
     },
   });
 
+  const usePreviewPromptMutation = () => useMutation({
+    mutationFn: async (data: Partial<Assistant>) => {
+      const response = await apiClient.post<PreviewPromptResponse>('/assistants/preview-prompt', data);
+      return response.data;
+    },
+  });
+
   return {
     useAssistantsQuery,
     useAssistantQuery,
@@ -103,5 +117,6 @@ export const useAssistantsHooks = () => {
     useDeleteAssistantMutation,
     useUpdateAssistantStatusMutation,
     useToolsQuery,
+    usePreviewPromptMutation,
   };
 };
