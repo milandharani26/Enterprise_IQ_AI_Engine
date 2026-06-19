@@ -1,8 +1,7 @@
 """
 Database Connector Module
 """
-from engine.modules.database_connector.models import (
-    DatabaseConnection,
+from engine.modules.database_connector.database_connector_models import (
     SchemaTable,
     SchemaColumn,
     SchemaRelationship,
@@ -11,7 +10,6 @@ from engine.modules.database_connector.models import (
 )
 
 __all__ = [
-    "DatabaseConnection",
     "SchemaTable",
     "SchemaColumn",
     "SchemaRelationship",

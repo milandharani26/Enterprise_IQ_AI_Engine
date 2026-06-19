@@ -29,9 +29,31 @@ async def test_credential(test_req: CredentialTestRequest):
             client.list_files(page_size=1)
             return CredentialTestResponse(success=True, message="Connection to Google Drive successful!")
         
-        elif test_req.provider == 'PostgreSQL':
-            # Dummy test for Postgres for now, as we're focusing on Google Drive
-            return CredentialTestResponse(success=True, message="PostgreSQL configuration accepted (Dummy Test).")
+        elif test_req.provider in ['PostgreSQL', 'MySQL']:
+            auth_data = test_req.auth_data
+            host = auth_data.get('host')
+            port = auth_data.get('port')
+            username = auth_data.get('username')
+            password = auth_data.get('password')
+            database = auth_data.get('database')
+            
+            if not all([host, port, username, password, database]):
+                return CredentialTestResponse(success=False, message="Missing required database configuration.")
+                
+            if test_req.provider == 'PostgreSQL':
+                db_url = f"postgresql+asyncpg://{username}:{password}@{host}:{port}/{database}"
+            else:
+                db_url = f"mysql+aiomysql://{username}:{password}@{host}:{port}/{database}"
+                
+            from sqlalchemy.ext.asyncio import create_async_engine
+            from sqlalchemy import text
+            try:
+                engine = create_async_engine(db_url, echo=False, pool_pre_ping=True)
+                async with engine.connect() as conn:
+                    await conn.execute(text("SELECT 1"))
+                return CredentialTestResponse(success=True, message=f"Connection to {test_req.provider} successful!")
+            except Exception as e:
+                return CredentialTestResponse(success=False, message=f"Failed to connect: {str(e)}")
             
         else:
             return CredentialTestResponse(success=False, message=f"Provider '{test_req.provider}' is not supported for testing.")

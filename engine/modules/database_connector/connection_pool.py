@@ -5,8 +5,6 @@ from typing import Dict, Any
 import asyncpg
 # import aiomysql  # Will be added for MySQL support
 
-from engine.modules.database_connector.models import DatabaseConnection
-
 logger = logging.getLogger(__name__)
 
 class ExternalConnectionPoolService:
@@ -23,10 +21,8 @@ class ExternalConnectionPoolService:
             cls._instance = super(ExternalConnectionPoolService, cls).__new__(cls)
         return cls._instance
 
-    async def get_pool(self, conn_obj: DatabaseConnection):
+    async def get_pool(self, pool_key: str, database_type: str, auth_data: dict):
         """Gets or creates an async connection pool for the given external database."""
-        pool_key = str(conn_obj.id)
-        
         async with self._lock:
             if pool_key in self._pools:
                 return self._pools[pool_key]
@@ -34,30 +30,30 @@ class ExternalConnectionPoolService:
             logger.info(f"Creating new connection pool for external database {pool_key}")
             
             try:
-                if conn_obj.database_type.lower() == "postgresql":
+                if database_type.lower() == "postgresql":
                     pool = await asyncpg.create_pool(
-                        user=conn_obj.username,
-                        password=conn_obj.password,
-                        database=conn_obj.database_name,
-                        host=conn_obj.host,
-                        port=conn_obj.port,
+                        user=auth_data.get("username"),
+                        password=auth_data.get("password"),
+                        database=auth_data.get("database"),
+                        host=auth_data.get("host"),
+                        port=int(auth_data.get("port")),
                         min_size=1,
                         max_size=10,
                         command_timeout=30.0
                     )
-                elif conn_obj.database_type.lower() == "mysql":
+                elif database_type.lower() == "mysql":
                     import aiomysql
                     pool = await aiomysql.create_pool(
-                        host=conn_obj.host,
-                        port=conn_obj.port,
-                        user=conn_obj.username,
-                        password=conn_obj.password,
-                        db=conn_obj.database_name,
+                        host=auth_data.get("host"),
+                        port=int(auth_data.get("port")),
+                        user=auth_data.get("username"),
+                        password=auth_data.get("password"),
+                        db=auth_data.get("database"),
                         minsize=1,
                         maxsize=10
                     )
                 else:
-                    raise ValueError(f"Unsupported database type: {conn_obj.database_type}")
+                    raise ValueError(f"Unsupported database type: {database_type}")
                 
                 self._pools[pool_key] = pool
                 return pool
@@ -83,3 +79,4 @@ class ExternalConnectionPoolService:
 
 # Global singleton instance
 pool_service = ExternalConnectionPoolService()
+

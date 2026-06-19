@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 from pgvector.sqlalchemy import Vector
 
 revision: str = "connector_rev"
-down_revision: Union[str, Sequence[str], None] = "knowledge_rev"
+down_revision: Union[str, Sequence[str], None] = "f6c5210f84c5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

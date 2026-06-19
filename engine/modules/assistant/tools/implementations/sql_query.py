@@ -16,12 +16,13 @@ from engine.modules.assistant.tools.exceptions import ToolExecutionError
 from engine.shared.db.session import AsyncSessionLocal
 
 from engine.modules.database_connector.retrieval_service import DatabaseRetrievalService
-from engine.modules.database_connector.embedding_service import SchemaEmbeddingService
+from engine.pipelines.ingestion.services.embedding_service import EmbeddingService
 from engine.modules.database_connector.sql_generation import SqlGenerationService
 from engine.modules.database_connector.sql_validator import SqlValidatorService
 from engine.modules.database_connector.sql_executor import SqlExecutionService
 from engine.modules.database_connector.response_formatter import SqlResponseFormatter
-from engine.modules.database_connector.models import SqlQueryLog, DatabaseConnection
+from engine.modules.database_connector.database_connector_models import SqlQueryLog
+from engine.shared.models.connector_model import Connector
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ class SqlQueryTool(BaseTool):
             credential_id=credential_id,
             usage_instructions=usage_instructions,
         )
-        self._embedding_service = SchemaEmbeddingService()
+        self._embedding_service = EmbeddingService()
         self._sql_generation = SqlGenerationService(config)
 
     async def _arun(self, question: str, ctx: ToolContext = None) -> str:
@@ -116,7 +117,7 @@ class SqlQueryTool(BaseTool):
         async with AsyncSessionLocal() as db:
             try:
                 logger.info("STEP 2 - Embedding question")
-                q_vec = await self._embedding_service._embed_text(question)
+                q_vec = await self._embedding_service.embed_query(question)
                 logger.info("Embedding completed")
 
                 logger.info("STEP 3 - Finding relevant database")
@@ -143,8 +144,8 @@ class SqlQueryTool(BaseTool):
                 db_obj = (
                     (
                         await db.execute(
-                            select(DatabaseConnection).where(
-                                DatabaseConnection.id == selected_db_id
+                            select(Connector).where(
+                                Connector.id == selected_db_id
                             )
                         )
                     )
@@ -154,7 +155,7 @@ class SqlQueryTool(BaseTool):
 
                 if db_obj:
                     selected_db_name = db_obj.name
-                    db_type = db_obj.database_type
+                    db_type = db_obj.connector_id
 
                     logger.info(f"Database Name: {selected_db_name}")
                     logger.info(f"Database Type: {db_type}")
@@ -266,7 +267,7 @@ class SqlQueryTool(BaseTool):
 
                 log_entry = SqlQueryLog(
                     organization_id=org_id,
-                    database_connection_id=selected_db_id,
+                    connector_id=selected_db_id,
                     user_id=user_id,
                     question=question,
                     generated_sql=generated_sql,

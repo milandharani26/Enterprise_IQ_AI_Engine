@@ -5,7 +5,7 @@ from typing import List, Tuple, Dict, Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from engine.modules.database_connector.models import SchemaEmbedding, SchemaTable, SchemaColumn, SchemaRelationship
+from engine.modules.database_connector.database_connector_models import SchemaEmbedding, SchemaTable, SchemaColumn, SchemaRelationship
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class DatabaseRetrievalService:
         """
         # `<=>` is the cosine distance operator in pgvector
         stmt = (
-            select(SchemaEmbedding.database_connection_id)
+            select(SchemaEmbedding.connector_id)
             .where(
                 SchemaEmbedding.organization_id == org_id,
                 SchemaEmbedding.object_type == "database"
@@ -32,19 +32,19 @@ class DatabaseRetrievalService:
 
     @staticmethod
     async def find_relevant_tables(
-        db: AsyncSession, question_embedding: List[float], org_id: UUID, database_connection_ids: List[UUID], top_k: int = 10
+        db: AsyncSession, question_embedding: List[float], org_id: UUID, connector_ids: List[UUID], top_k: int = 10
     ) -> List[str]:
         """
         Finds the most relevant tables and relationships across candidate databases.
         """
-        if not database_connection_ids:
+        if not connector_ids:
             return []
 
         stmt = (
             select(SchemaEmbedding.object_name)
             .where(
                 SchemaEmbedding.organization_id == org_id,
-                SchemaEmbedding.database_connection_id.in_(database_connection_ids),
+                SchemaEmbedding.connector_id.in_(connector_ids),
                 SchemaEmbedding.object_type.in_(["table", "relationship"])
             )
             .order_by(SchemaEmbedding.embedding.cosine_distance(question_embedding))
@@ -58,12 +58,12 @@ class DatabaseRetrievalService:
 
     @staticmethod
     async def build_schema_context(
-        db: AsyncSession, org_id: UUID, database_connection_ids: List[UUID], relevant_object_names: List[str]
+        db: AsyncSession, org_id: UUID, connector_ids: List[UUID], relevant_object_names: List[str]
     ) -> str:
         """
         Builds the markdown schema block to inject into the LLM prompt.
         """
-        if not database_connection_ids or not relevant_object_names:
+        if not connector_ids or not relevant_object_names:
             return "No relevant database tables found."
 
         # Extract actual table names from the relevant objects
@@ -82,7 +82,7 @@ class DatabaseRetrievalService:
         # Fetch actual table models
         stmt = select(SchemaTable).where(
             SchemaTable.organization_id == org_id,
-            SchemaTable.database_connection_id.in_(database_connection_ids)
+            SchemaTable.connector_id.in_(connector_ids)
         )
         # In a real scenario we might want to filter by table_names specifically
         # but because schema_name.table_name is what we stored, we need to match it.
@@ -126,7 +126,7 @@ class DatabaseRetrievalService:
         # Add relationships
         stmt_rels = select(SchemaRelationship).where(
             SchemaRelationship.organization_id == org_id,
-            SchemaRelationship.database_connection_id.in_(database_connection_ids)
+            SchemaRelationship.connector_id.in_(connector_ids)
         )
         rels = (await db.execute(stmt_rels)).scalars().all()
         

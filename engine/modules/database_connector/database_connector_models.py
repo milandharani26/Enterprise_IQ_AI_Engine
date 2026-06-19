@@ -23,27 +23,7 @@ from pgvector.sqlalchemy import Vector
 
 from engine.shared.db.base_class import Base
 
-class DatabaseConnection(Base):
-    __tablename__ = "database_connections"
-    __table_args__ = {"schema": "connectors"}
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    organization_id = Column(UUID(as_uuid=True), nullable=False)
-    name = Column(String(255), nullable=False)
-    database_type = Column(String(50), nullable=False)
-    host = Column(String(512), nullable=False)
-    port = Column(Integer, nullable=False)
-    database_name = Column(String(255), nullable=False)
-    schema_name = Column(String(255), nullable=True)
-    username = Column(String(255), nullable=False)
-    password = Column(Text, nullable=False)
-    is_active = Column(Boolean, server_default="true", nullable=False)
-    last_synced_at = Column(DateTime, nullable=True)
-    sync_status = Column(String(50), nullable=True)
-    sync_error = Column(Text, nullable=True)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
-    deleted_at = Column(DateTime, nullable=True)
 
 
 class SchemaTable(Base):
@@ -52,7 +32,7 @@ class SchemaTable(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     organization_id = Column(UUID(as_uuid=True), nullable=False)
-    database_connection_id = Column(UUID(as_uuid=True), ForeignKey("connectors.database_connections.id", ondelete="CASCADE"), nullable=False)
+    connector_id = Column(UUID(as_uuid=True), ForeignKey("public.connectors.id", ondelete="CASCADE"), nullable=False)
     schema_name = Column(String(255), nullable=True)
     table_name = Column(String(255), nullable=False)
     table_description = Column(Text, nullable=True)
@@ -83,7 +63,7 @@ class SchemaRelationship(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     organization_id = Column(UUID(as_uuid=True), nullable=False)
-    database_connection_id = Column(UUID(as_uuid=True), ForeignKey("connectors.database_connections.id", ondelete="CASCADE"), nullable=False)
+    connector_id = Column(UUID(as_uuid=True), ForeignKey("public.connectors.id", ondelete="CASCADE"), nullable=False)
     source_table = Column(String(512), nullable=False)
     source_column = Column(String(255), nullable=False)
     target_table = Column(String(512), nullable=False)
@@ -97,7 +77,7 @@ class SchemaEmbedding(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     organization_id = Column(UUID(as_uuid=True), nullable=False)
-    database_connection_id = Column(UUID(as_uuid=True), ForeignKey("connectors.database_connections.id", ondelete="CASCADE"), nullable=False)
+    connector_id = Column(UUID(as_uuid=True), ForeignKey("public.connectors.id", ondelete="CASCADE"), nullable=False)
     object_type = Column(String(50), nullable=False)
     object_name = Column(String(512), nullable=False)
     content = Column(Text, nullable=False)
@@ -111,7 +91,7 @@ class SqlQueryLog(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     organization_id = Column(UUID(as_uuid=True), nullable=False)
-    database_connection_id = Column(UUID(as_uuid=True), ForeignKey("connectors.database_connections.id", ondelete="SET NULL"), nullable=True)
+    connector_id = Column(UUID(as_uuid=True), ForeignKey("public.connectors.id", ondelete="SET NULL"), nullable=True)
     user_id = Column(UUID(as_uuid=True), nullable=True)
     question = Column(Text, nullable=False)
     generated_sql = Column(Text, nullable=True)

@@ -7,13 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import asyncpg
 # import aiomysql  # Will be added for MySQL support
 
-from engine.modules.database_connector.models import (
-    DatabaseConnection,
+from engine.modules.database_connector.database_connector_models import (
     SchemaTable,
     SchemaColumn,
-    SchemaRelationship
+    SchemaRelationship,
+    SchemaEmbedding
 )
-from engine.modules.database_connector.embedding_service import SchemaEmbeddingService
+from engine.shared.models.connector_model import Connector
+from engine.shared.models.credential_model import Credential
+from engine.pipelines.ingestion.services.embedding_service import EmbeddingService
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +25,9 @@ class SchemaCrawlerService:
         logger.info(f"Starting schema sync for connection {connection_id}")
         
         # 1. Fetch connection details
-        stmt = select(DatabaseConnection).where(
-            DatabaseConnection.id == connection_id,
-            DatabaseConnection.organization_id == org_id,
-            DatabaseConnection.deleted_at.is_(None)
+        stmt = select(Connector).where(
+            Connector.id == connection_id,
+            Connector.organization_id == org_id
         )
         result = await db.execute(stmt)
         conn_obj = result.scalars().first()
@@ -35,24 +36,34 @@ class SchemaCrawlerService:
             logger.error(f"Connection {connection_id} not found or deleted.")
             return
 
+        cred_stmt = select(Credential).where(Credential.id == conn_obj.credential_id)
+        cred_result = await db.execute(cred_stmt)
+        cred_obj = cred_result.scalars().first()
+        
+        if not cred_obj:
+            logger.error(f"Credential {conn_obj.credential_id} not found for connection.")
+            return
+
         conn_obj.sync_status = "syncing"
         await db.commit()
 
+        auth_data = cred_obj.auth_data
+        database_type = conn_obj.connector_id
+
         try:
             # 2. Extract metadata based on DB type
-            if conn_obj.database_type.lower() == "postgresql":
-                tables, columns, relationships = await self._crawl_postgres(conn_obj)
-            elif conn_obj.database_type.lower() == "mysql":
-                tables, columns, relationships = await self._crawl_mysql(conn_obj)
+            if database_type.lower() in ("postgresql", "postgres"):
+                tables, columns, relationships = await self._crawl_postgres(auth_data)
+            elif database_type.lower() == "mysql":
+                tables, columns, relationships = await self._crawl_mysql(auth_data)
             else:
-                raise ValueError(f"Unsupported database type: {conn_obj.database_type}")
+                raise ValueError(f"Unsupported database type: {database_type}")
 
             # 3. Persist metadata
             await self._persist_metadata(db, conn_obj, tables, columns, relationships)
 
-            # 4. Generate embeddings
-            embedding_service = SchemaEmbeddingService()
-            await embedding_service.generate_embeddings(db, connection_id, org_id)
+            # 4. Generate embeddings using batched pipeline service
+            await self._generate_embeddings(db, connection_id, org_id)
 
             # 5. Update status
             conn_obj.sync_status = "synced"
@@ -68,17 +79,115 @@ class SchemaCrawlerService:
             conn_obj.sync_error = str(e)
             await db.commit()
 
-    async def _crawl_postgres(self, conn_obj: DatabaseConnection):
+    async def _generate_embeddings(self, db: AsyncSession, connection_id: UUID, org_id: UUID):
+        """Generates natural language descriptions of tables and relationships, and embeds them."""
+        logger.info(f"Generating schema embeddings for connection {connection_id}")
+
+        # 1. Clear old embeddings
+        await db.execute(delete(SchemaEmbedding).where(SchemaEmbedding.connector_id == connection_id))
+        await db.flush()
+
+        # 2. Fetch tables and columns
+        stmt = select(SchemaTable).where(
+            SchemaTable.connector_id == connection_id,
+            SchemaTable.organization_id == org_id
+        )
+        tables = (await db.execute(stmt)).scalars().all()
+
+        if not tables:
+            logger.warning(f"No tables found for connection {connection_id} to embed.")
+            return
+
+        table_ids = [t.id for t in tables]
+        stmt_cols = select(SchemaColumn).where(SchemaColumn.table_id.in_(table_ids))
+        columns = (await db.execute(stmt_cols)).scalars().all()
+
+        col_map = {}
+        for c in columns:
+            col_map.setdefault(c.table_id, []).append(c)
+
+        # 3. Fetch relationships
+        stmt_rels = select(SchemaRelationship).where(
+            SchemaRelationship.connector_id == connection_id
+        )
+        relationships = (await db.execute(stmt_rels)).scalars().all()
+
+        embeddings_to_insert = []
+        all_texts = []
+        embed_defs = []
+
+        # A. Embed the whole database summary
+        table_names = [f"{t.schema_name + '.' if t.schema_name else ''}{t.table_name}" for t in tables]
+        db_summary = f"Database containing {len(tables)} tables: {', '.join(table_names)}."
+        all_texts.append(db_summary)
+        embed_defs.append({
+            "object_type": "database",
+            "object_name": "database_summary",
+            "content": db_summary
+        })
+
+        # B. Embed each table
+        for t in tables:
+            t_cols = col_map.get(t.id, [])
+            col_desc = []
+            for c in t_cols:
+                pk_str = " (Primary Key)" if c.is_primary_key else ""
+                desc_str = f" - {c.column_description}" if c.column_description else ""
+                col_desc.append(f"{c.column_name} ({c.data_type}){pk_str}{desc_str}")
+            
+            full_t_name = f"{t.schema_name + '.' if t.schema_name else ''}{t.table_name}"
+            desc = t.table_description or "No description provided."
+            content = f"Table {full_t_name}: {desc}. Columns: {', '.join(col_desc)}."
+            all_texts.append(content)
+            embed_defs.append({
+                "object_type": "table",
+                "object_name": full_t_name,
+                "content": content
+            })
+
+        # C. Embed each relationship
+        for r in relationships:
+            content = f"Relationship: Table {r.source_table} column {r.source_column} is a foreign key referencing Table {r.target_table} column {r.target_column}."
+            all_texts.append(content)
+            embed_defs.append({
+                "object_type": "relationship",
+                "object_name": f"{r.source_table}->{r.target_table}",
+                "content": content
+            })
+
+        # Batch embed
+        pipeline_embed_svc = EmbeddingService()
+        vectors = await pipeline_embed_svc.embed_chunks(all_texts)
+
+        for i, vec in enumerate(vectors):
+            meta = embed_defs[i]
+            embeddings_to_insert.append(
+                SchemaEmbedding(
+                    organization_id=org_id,
+                    connector_id=connection_id,
+                    object_type=meta["object_type"],
+                    object_name=meta["object_name"],
+                    content=meta["content"],
+                    embedding=vec
+                )
+            )
+
+        # Batch insert
+        db.add_all(embeddings_to_insert)
+        await db.commit()
+        logger.info(f"Successfully generated {len(embeddings_to_insert)} schema embeddings for connection {connection_id}")
+
+    async def _crawl_postgres(self, auth_data: dict):
         """Connects to PostgreSQL and extracts schema metadata."""
-        schema_filter = conn_obj.schema_name or 'public'
+        schema_filter = auth_data.get('schema') or 'public'
         
         try:
             conn = await asyncpg.connect(
-                user=conn_obj.username,
-                password=conn_obj.password,
-                database=conn_obj.database_name,
-                host=conn_obj.host,
-                port=conn_obj.port,
+                user=auth_data.get('username'),
+                password=auth_data.get('password'),
+                database=auth_data.get('database'),
+                host=auth_data.get('host'),
+                port=int(auth_data.get('port')),
             )
         except Exception as e:
             raise Exception(f"Failed to connect to PostgreSQL: {e}")
@@ -178,18 +287,18 @@ class SchemaCrawlerService:
         finally:
             await conn.close()
 
-    async def _crawl_mysql(self, conn_obj: DatabaseConnection):
+    async def _crawl_mysql(self, auth_data: dict):
         """Connects to MySQL and extracts schema metadata."""
         import aiomysql
-        schema_filter = conn_obj.schema_name or conn_obj.database_name
+        schema_filter = auth_data.get('schema') or auth_data.get('database')
         
         try:
             conn = await aiomysql.connect(
-                host=conn_obj.host,
-                port=conn_obj.port,
-                user=conn_obj.username,
-                password=conn_obj.password,
-                db=conn_obj.database_name,
+                host=auth_data.get('host'),
+                port=int(auth_data.get('port')),
+                user=auth_data.get('username'),
+                password=auth_data.get('password'),
+                db=auth_data.get('database'),
             )
         except Exception as e:
             raise Exception(f"Failed to connect to MySQL: {e}")
@@ -253,12 +362,12 @@ class SchemaCrawlerService:
         finally:
             conn.close()
 
-    async def _persist_metadata(self, db: AsyncSession, conn_obj: DatabaseConnection, tables: list, columns: list, relationships: list):
+    async def _persist_metadata(self, db: AsyncSession, conn_obj: Connector, tables: list, columns: list, relationships: list):
         """Saves metadata to database, replacing old records."""
         
         # 1. Delete existing relationships and tables (cascades to columns and embeddings)
-        await db.execute(delete(SchemaRelationship).where(SchemaRelationship.database_connection_id == conn_obj.id))
-        await db.execute(delete(SchemaTable).where(SchemaTable.database_connection_id == conn_obj.id))
+        await db.execute(delete(SchemaRelationship).where(SchemaRelationship.connector_id == conn_obj.id))
+        await db.execute(delete(SchemaTable).where(SchemaTable.connector_id == conn_obj.id))
         await db.flush()
 
         # 2. Insert Tables
@@ -267,7 +376,7 @@ class SchemaCrawlerService:
         for t in tables:
             obj = SchemaTable(
                 organization_id=conn_obj.organization_id,
-                database_connection_id=conn_obj.id,
+                connector_id=conn_obj.id,
                 schema_name=t["schema_name"],
                 table_name=t["table_name"],
                 table_description=t.get("table_description")
@@ -306,7 +415,7 @@ class SchemaCrawlerService:
         for r in relationships:
             obj = SchemaRelationship(
                 organization_id=conn_obj.organization_id,
-                database_connection_id=conn_obj.id,
+                connector_id=conn_obj.id,
                 source_table=r["source_table"],
                 source_column=r["source_column"],
                 target_table=r["target_table"],

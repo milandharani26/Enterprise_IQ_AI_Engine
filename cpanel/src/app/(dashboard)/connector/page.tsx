@@ -11,21 +11,24 @@ import {
 import { useConnectorsHooks, Connector } from '@/hooks/api/useConnectors';
 import { useCredentialsHooks, Credential } from '@/hooks/api/useCredentials';
 import { useAppStore } from '@/store/useAppStore';
+import toast from 'react-hot-toast';
 
-const UI_META: Record<string, any> = {
+interface UIMetaDef {
+  name: string;
+  provider: string;
+  icon: any; // using any for lucide icon
+  colorBase: string;
+}
+
+const UI_META: Record<string, UIMetaDef> = {
   google_drive: { name: 'Google Drive', provider: 'Google', icon: HardDrive, colorBase: 'blue' },
   postgres: { name: 'PostgreSQL', provider: 'PostgreSQL', icon: Database, colorBase: 'indigo' },
+  mysql: { name: 'MySQL', provider: 'MySQL', icon: Database, colorBase: 'indigo' },
 };
-import {
-  useDatabaseConnections,
-  useUpdateDatabaseConnection,
-  useSyncDatabaseConnection
-} from '@/hooks/api/useDatabaseConnections';
-import toast from 'react-hot-toast';
 
 export default function ConnectorPage() {
   const { activeOrganizationId } = useAppStore();
-  const { useConnectorsQuery, useAddConnectorMutation, useUpdateConnectorMutation } = useConnectorsHooks();
+  const { useConnectorsQuery, useAddConnectorMutation, useUpdateConnectorMutation, useSyncConnectorMutation } = useConnectorsHooks();
   const { useCredentialsQuery } = useCredentialsHooks();
 
   const { data: dbConnectors = [], isLoading: isLoadingConnectors } = useConnectorsQuery(activeOrganizationId);
@@ -33,6 +36,7 @@ export default function ConnectorPage() {
 
   const addConnectorMutation = useAddConnectorMutation();
   const updateConnectorMutation = useUpdateConnectorMutation();
+  const syncConnectorMutation = useSyncConnectorMutation();
 
   const [selectedConnector, setSelectedConnector] = useState<Connector | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -55,90 +59,49 @@ export default function ConnectorPage() {
         }
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOrganizationId, isLoadingConnectors, dbConnectors]);
 
-  // API Hooks
-  const { data: dbConnections, isLoading: isDbLoading } = useDatabaseConnections();
-  const updateDbConn = useUpdateDatabaseConnection();
-  const syncDbConn = useSyncDatabaseConnection();
-
-  // Find active / mapped database connections
-  const activePgConn = dbConnections?.find(c => c.database_type === 'postgresql' && c.is_active);
-  const activeMySqlConn = dbConnections?.find(c => c.database_type === 'mysql' && c.is_active);
-
-  // Map PostgreSQL and MySQL connectors based on real backend data
-  const derivedConnectors = connectors.map(conn => {
-    if (conn.id === 'postgres') {
-      return {
-        ...conn,
-        enabled: !!activePgConn,
-        credentialMapped: !!activePgConn,
-        credentialId: activePgConn?.id,
-        syncStatus: activePgConn?.sync_status,
-        lastSyncedAt: activePgConn?.last_synced_at
-      };
-    }
-    if (conn.id === 'mysql') {
-      return {
-        ...conn,
-        enabled: !!activeMySqlConn,
-        credentialMapped: !!activeMySqlConn,
-        credentialId: activeMySqlConn?.id,
-        syncStatus: activeMySqlConn?.sync_status,
-        lastSyncedAt: activeMySqlConn?.last_synced_at
-      };
-    }
-    return conn;
-  });
 
   const handleToggle = async (connector: Connector) => {
-    if (!connector.enabled) {
+    if (connector.status !== 'enabled') {
       // Opening modal to configure before enabling
       setSelectedConnector(connector);
       setSelectedCredentialId(connector.credential_id || '');
       setIsModalOpen(true);
     } else {
       // Disable directly
-      if (connector.id === 'postgres' || connector.id === 'mysql') {
-        const activeConnId = connector.credentialId;
-        if (activeConnId) {
-          try {
-            await updateDbConn.mutateAsync({ id: activeConnId, data: { is_active: false } });
-            toast.success(`${connector.name} connector disabled.`);
-          } catch (e) {
-            console.error(e);
-            toast.error(`Failed to disable ${connector.name} connector.`);
-          }
-        }
-      } else {
-        updateConnector(connector.id, { enabled: false, credentialMapped: false, credentialId: undefined });
-      }
+      updateConnectorMutation.mutate({ id: connector.id, updates: { status: 'disabled', credential_id: null } });
     }
   };
 
   const handleSaveAndEnable = async () => {
     if (selectedConnector) {
-      if (selectedConnector.id === 'postgres' || selectedConnector.id === 'mysql') {
-        if (!selectedCredentialId) {
-          toast.error("Please select a credential.");
-          return;
-        }
-        try {
-          await updateDbConn.mutateAsync({ id: selectedCredentialId, data: { is_active: true } });
-          // Start the schema sync immediately
-          await syncDbConn.mutateAsync(selectedCredentialId);
-          toast.success(`${selectedConnector.name} connector enabled and schema sync started!`);
-        } catch (e) {
-          console.error(e);
-          toast.error(`Failed to enable ${selectedConnector.name} connector.`);
-        }
-      } else {
-        updateConnector(selectedConnector.id, {
-          enabled: true,
-          credentialMapped: !!selectedCredentialId,
-          credentialId: selectedCredentialId || undefined
-        });
+      if (!selectedCredentialId) {
+        toast.error("Please select a credential.");
+        return;
       }
+      try {
+        await updateConnectorMutation.mutateAsync({
+          id: selectedConnector.id,
+          updates: {
+            status: 'enabled',
+            credential_id: selectedCredentialId || null
+          }
+        });
+        
+        // If it's a database, auto-sync
+        if (selectedConnector.connector_id === 'postgres' || selectedConnector.connector_id === 'mysql') {
+          await syncConnectorMutation.mutateAsync(selectedConnector.id);
+          toast.success(`${selectedConnector.name} connector enabled and schema sync started!`);
+        } else {
+          toast.success(`${selectedConnector.name} connector enabled!`);
+        }
+      } catch (e: unknown) {
+        console.error(e);
+        toast.error(`Failed to enable ${selectedConnector.name} connector.`);
+      }
+      
       setIsModalOpen(false);
       setSelectedConnector(null);
     }
@@ -147,17 +110,7 @@ export default function ConnectorPage() {
   const availableCredentials = selectedConnector
     ? (selectedConnector.provider.toLowerCase() === 'google'
       ? credentials.filter(c => c.provider.toLowerCase() === 'google')
-      : (dbConnections || []).map(db => ({
-        id: db.id,
-        name: `${db.name} (${db.host})`,
-        provider: db.database_type === 'postgresql' ? 'PostgreSQL' : 'MySQL',
-        status: db.sync_status || 'pending',
-        database_type: db.database_type
-      })).filter(c => {
-        if (selectedConnector.id === 'postgres') return c.database_type === 'postgresql';
-        if (selectedConnector.id === 'mysql') return c.database_type === 'mysql';
-        return false;
-      }))
+      : credentials.filter(c => c.provider.toLowerCase() === selectedConnector.provider.toLowerCase()))
     : [];
 
   const getColorClasses = (colorBase: string) => {
@@ -249,23 +202,23 @@ export default function ConnectorPage() {
                   {isMapped ? 'Credentials successfully mapped.' : 'No credential mapped yet.'}
                 </p>
 
-                {connector.enabled && (connector.id === 'postgres' || connector.id === 'mysql') && (
+                {connector.status === 'enabled' && (connector.connector_id === 'postgres' || connector.connector_id === 'mysql') && (
                   <div className="mt-4 pt-4 border-t border-black/5 dark:border-white/5 flex items-center justify-between">
                     <div className="flex flex-col">
                       <span className="text-xs text-gray-500 dark:text-gray-400">Sync Status</span>
-                      <span className={`text-sm font-semibold capitalize ${connector.syncStatus === 'synced' ? 'text-emerald-600 dark:text-emerald-400' :
-                        connector.syncStatus === 'syncing' ? 'text-blue-600 dark:text-blue-400 animate-pulse' :
-                          connector.syncStatus === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'
+                      <span className={`text-sm font-semibold capitalize ${connector.sync_status === 'synced' ? 'text-emerald-600 dark:text-emerald-400' :
+                        connector.sync_status === 'syncing' ? 'text-blue-600 dark:text-blue-400 animate-pulse' :
+                          connector.sync_status === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'
                         }`}>
-                        {connector.syncStatus || 'Pending'}
+                        {connector.sync_status || 'Pending'}
                       </span>
                     </div>
                     <button
-                      onClick={() => connector.credentialId && syncDbConn.mutate(connector.credentialId)}
-                      disabled={connector.syncStatus === 'syncing'}
+                      onClick={() => syncConnectorMutation.mutate(connector.id)}
+                      disabled={connector.sync_status === 'syncing'}
                       className="px-3 py-1.5 rounded-lg text-xs font-medium bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-900 dark:text-white transition-colors disabled:opacity-50"
                     >
-                      {connector.syncStatus === 'syncing' ? 'Syncing...' : 'Sync Schema'}
+                      {connector.sync_status === 'syncing' ? 'Syncing...' : 'Sync Schema'}
                     </button>
                   </div>
                 )}

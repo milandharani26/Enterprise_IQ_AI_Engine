@@ -5,9 +5,11 @@ from typing import Dict, Any, Tuple, List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 import asyncpg
 
-from engine.modules.database_connector.models import DatabaseConnection
+from engine.shared.models.connector_model import Connector
+from engine.shared.models.credential_model import Credential
 from engine.modules.database_connector.connection_pool import pool_service
 
 logger = logging.getLogger(__name__)
@@ -24,10 +26,9 @@ class SqlExecutionService:
         logger.info(f"Executing SQL query on connection {connection_id}")
         
         # 1. Fetch connection details
-        stmt = select(DatabaseConnection).where(
-            DatabaseConnection.id == connection_id,
-            DatabaseConnection.organization_id == org_id,
-            DatabaseConnection.deleted_at.is_(None)
+        stmt = select(Connector).where(
+            Connector.id == connection_id,
+            Connector.organization_id == org_id
         )
         result = await db.execute(stmt)
         conn_obj = result.scalars().first()
@@ -35,16 +36,31 @@ class SqlExecutionService:
         if not conn_obj:
             raise ValueError(f"Database connection {connection_id} not found.")
 
+        # Also get credential
+        if not conn_obj.credential_id:
+            raise ValueError(f"No credentials found for database connection {connection_id}.")
+            
+        cred_stmt = select(Credential).where(Credential.id == conn_obj.credential_id)
+        cred_result = await db.execute(cred_stmt)
+        cred_obj = cred_result.scalars().first()
+        
+        if not cred_obj:
+            raise ValueError(f"Credential {conn_obj.credential_id} not found.")
+
+        auth_data = cred_obj.auth_data
+
+        database_type = conn_obj.connector_id # e.g., 'postgres', 'mysql'
+
         # 2. Safety wrapper (auto-limit if missing)
         upper_sql = sql.upper()
-        if "LIMIT " not in upper_sql and conn_obj.database_type.lower() in ("postgresql", "mysql"):
+        if "LIMIT " not in upper_sql and database_type.lower() in ("postgresql", "postgres", "mysql"):
             sql = f"{sql.rstrip(';')} LIMIT 100"
 
         # 3. Get pool and execute
-        pool = await pool_service.get_pool(conn_obj)
+        pool = await pool_service.get_pool(str(conn_obj.id), database_type, auth_data)
         
         try:
-            if conn_obj.database_type.lower() == "postgresql":
+            if database_type.lower() in ("postgresql", "postgres"):
                 async with pool.acquire() as conn:
                     # Enforce read-only at transaction level
                     async with conn.transaction(readonly=True):
@@ -59,7 +75,7 @@ class SqlExecutionService:
                         rows = [dict(r) for r in records]
                         return columns, rows, len(rows)
             
-            elif conn_obj.database_type.lower() == "mysql":
+            elif database_type.lower() == "mysql":
                 import aiomysql
                 async with pool.acquire() as conn:
                     async with conn.cursor(aiomysql.DictCursor) as cur:
@@ -74,7 +90,7 @@ class SqlExecutionService:
                         columns = list(rows[0].keys())
                         return columns, list(rows), len(rows)
             else:
-                raise ValueError(f"Unsupported database type: {conn_obj.database_type}")
+                raise ValueError(f"Unsupported database type: {database_type}")
                 
         except asyncio.TimeoutError:
             logger.error("SQL query execution timed out")

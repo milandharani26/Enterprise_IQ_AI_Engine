@@ -7,7 +7,7 @@ from engine.modules.conversation import conversation_router
 from engine.modules.organization import organization_router
 from engine.modules.documents import router as documents_router
 from engine.modules.drive_documents import router as drive_documents_router
-from engine.modules.database_connector.routes import router as db_connector_router
+from engine.modules.database_connector.database_connector_routes import router as db_connector_router
 
 router = APIRouter()
 
