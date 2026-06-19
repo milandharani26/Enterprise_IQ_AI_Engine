@@ -30,7 +30,7 @@ class ExternalConnectionPoolService:
             logger.info(f"Creating new connection pool for external database {pool_key}")
             
             try:
-                if database_type.lower() == "postgresql":
+                if database_type.lower() in ("postgresql", "postgres"):
                     pool = await asyncpg.create_pool(
                         user=auth_data.get("username"),
                         password=auth_data.get("password"),

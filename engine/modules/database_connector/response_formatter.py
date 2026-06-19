@@ -14,19 +14,12 @@ class SqlResponseFormatter:
         
         # Determine format based on size
         if row_count <= 20:
-            # Small dataset: format nicely as bullets or a Markdown table
-            if len(columns) <= 3:
-                # Bullets for very simple sets
-                for row in rows:
-                    vals = [f"{str(row[c])}" for c in columns]
-                    response_lines.append(f"- {' | '.join(vals)}")
-            else:
-                # Markdown table
-                response_lines.append(f"| {' | '.join(columns)} |")
-                response_lines.append(f"|{'---|'*len(columns)}")
-                for row in rows:
-                    vals = [str(row[c]).replace('|', '\\|') for c in columns]
-                    response_lines.append(f"| {' | '.join(vals)} |")
+            # Small dataset: format nicely as a Markdown table
+            response_lines.append(f"| {' | '.join(columns)} |")
+            response_lines.append(f"|{'---|'*len(columns)}")
+            for row in rows:
+                vals = [str(row[c]).replace('|', '\\|') for c in columns]
+                response_lines.append(f"| {' | '.join(vals)} |")
         else:
             # Large dataset: show first 10 rows only
             response_lines.append(f"(Showing first 10 rows)")

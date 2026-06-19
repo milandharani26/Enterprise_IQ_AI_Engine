@@ -38,7 +38,7 @@ class SqlQueryToolInput(BaseModel):
 class SqlQueryTool(BaseTool):
     name = "sql_query"
     properties = ToolProperties(
-        description="Query connected SQL databases using natural language.",
+        description="ALWAYS USE THIS TOOL to answer questions about databases, records, tables, or SQL. Pass the user's natural language question directly to this tool. The tool will automatically find the correct database, schema, and execute the query.",
         category=ToolCategory.BUSINESS,
         input_schema=SqlQueryToolInput,
         required_connectors=["database"],

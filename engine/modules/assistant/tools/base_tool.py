@@ -70,7 +70,11 @@ class BaseTool:
             return result if isinstance(result, str) else str(result)
 
         async def arun(**kwargs):
-            result = await self._arun(ctx=ctx, **kwargs)
+            try:
+                result = await self._arun(ctx=ctx, **kwargs)
+            except NotImplementedError:
+                import asyncio
+                result = await asyncio.to_thread(self._run, ctx=ctx, **kwargs)
             return result if isinstance(result, str) else str(result)
 
         tool = StructuredTool.from_function(
