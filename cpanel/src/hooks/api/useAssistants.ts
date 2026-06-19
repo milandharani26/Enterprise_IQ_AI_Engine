@@ -87,6 +87,14 @@ export const useAssistantsHooks = () => {
     },
   });
 
+  const useToolsQuery = () => useQuery({
+    queryKey: [...assistantKeys.all, 'tools'],
+    queryFn: async () => {
+      const response = await apiClient.get<any[]>('/assistants/tools');
+      return response.data;
+    },
+  });
+
   return {
     useAssistantsQuery,
     useAssistantQuery,
@@ -94,5 +102,6 @@ export const useAssistantsHooks = () => {
     useUpdateAssistantMutation,
     useDeleteAssistantMutation,
     useUpdateAssistantStatusMutation,
+    useToolsQuery,
   };
 };

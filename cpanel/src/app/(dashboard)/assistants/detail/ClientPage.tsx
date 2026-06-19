@@ -19,8 +19,9 @@ export default function AssistantDetailsClient() {
   const id = searchParams?.get('id') as string;
   const router = useRouter();
 
-  const { useAssistantQuery, useUpdateAssistantMutation, useDeleteAssistantMutation, useUpdateAssistantStatusMutation } = useAssistantsHooks();
+  const { useAssistantQuery, useUpdateAssistantMutation, useDeleteAssistantMutation, useUpdateAssistantStatusMutation, useToolsQuery } = useAssistantsHooks();
   const { data: assistant, isLoading } = useAssistantQuery(id);
+  const { data: availableTools } = useToolsQuery();
   const updateMutation = useUpdateAssistantMutation();
   const deleteMutation = useDeleteAssistantMutation();
   const statusMutation = useUpdateAssistantStatusMutation();
@@ -345,10 +346,7 @@ export default function AssistantDetailsClient() {
         <form className="flex flex-col gap-5">
           <Select 
             label="Tool ID" 
-            options={[
-              { label: 'rag_search', value: 'rag_search' },
-              { label: 'fetch_weather', value: 'fetch_weather' },
-            ]}
+            options={availableTools?.map((t: any) => ({ label: t.tool_id, value: t.tool_id })) || []}
             value={newTool.id}
             onChange={(e) => setNewTool({ ...newTool, id: e.target.value })}
           />

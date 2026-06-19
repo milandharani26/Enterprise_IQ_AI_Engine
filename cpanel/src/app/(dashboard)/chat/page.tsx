@@ -32,37 +32,26 @@ function renderAssistantContent(content: string, metadata?: { content_blocks?: a
   return content;
 }
 
-/** Lightweight markdown: paragraphs, bold, bullets — no extra dependency. */
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
 function MarkdownMessage({ text }: { text: string }) {
-  const lines = text.split('\n');
   return (
-    <div className="space-y-2 text-sm leading-relaxed">
-      {lines.map((line, i) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <div key={i} className="h-1" />;
-        const isBullet = /^[-*•]\s/.test(trimmed);
-        const content = trimmed
-          .replace(/^[-*•]\s/, '')
-          .split(/(\*\*[^*]+\*\*)/g)
-          .map((part, j) =>
-            part.startsWith('**') && part.endsWith('**') ? (
-              <strong key={j} className="font-semibold">
-                {part.slice(2, -2)}
-              </strong>
-            ) : (
-              <span key={j}>{part}</span>
-            )
-          );
-        if (isBullet) {
-          return (
-            <div key={i} className="flex gap-2 pl-1">
-              <span className="text-gray-400 shrink-0">•</span>
-              <span>{content}</span>
-            </div>
-          );
-        }
-        return <p key={i}>{content}</p>;
-      })}
+    <div className="text-sm leading-relaxed space-y-2">
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ node, ...props }) => (
+            <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline break-all" />
+          ),
+          p: ({ node, ...props }) => <p className="m-0" {...props} />,
+          ul: ({ node, ...props }) => <ul className="list-disc pl-4 m-0" {...props} />,
+          ol: ({ node, ...props }) => <ol className="list-decimal pl-4 m-0" {...props} />,
+          li: ({ node, ...props }) => <li className="m-0" {...props} />
+        }}
+      >
+        {text}
+      </ReactMarkdown>
     </div>
   );
 }

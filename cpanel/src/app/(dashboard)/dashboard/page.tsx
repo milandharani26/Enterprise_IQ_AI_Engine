@@ -12,15 +12,21 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 import { useAssistantsHooks } from '@/hooks/api/useAssistants';
-import { useIntegrationStore } from '@/store/useIntegrationStore';
+import { useConnectorsHooks } from '@/hooks/api/useConnectors';
+import { useCredentialsHooks } from '@/hooks/api/useCredentials';
+import { useAppStore } from '@/store/useAppStore';
 
-export default function DashboardPage() {
+export default function Dashboard() {
+  const { activeOrganizationId } = useAppStore();
   const { useAssistantsQuery } = useAssistantsHooks();
-  const { data: assistants = [] } = useAssistantsQuery();
+  const { useConnectorsQuery } = useConnectorsHooks();
+  const { useCredentialsQuery } = useCredentialsHooks();
   
-  const { connectors, credentials } = useIntegrationStore();
+  const { data: assistants = [] } = useAssistantsQuery();
+  const { data: connectors = [] } = useConnectorsQuery(activeOrganizationId);
+  const { data: credentials = [] } = useCredentialsQuery(activeOrganizationId);
 
-  const enabledConnectors = connectors.filter(c => c.enabled);
+  const enabledConnectors = connectors.filter((c: any) => c.status === 'enabled');
   const activeCredentials = credentials.slice(0, 5);
 
   return (

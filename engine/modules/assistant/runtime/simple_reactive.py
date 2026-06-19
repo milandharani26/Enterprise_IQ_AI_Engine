@@ -11,6 +11,7 @@ from engine.modules.assistant.runtime.llm_initializer import initialize_llm
 from engine.modules.assistant.tools.base_tool import BaseTool, ToolContext
 from engine.modules.assistant.tools.tool_registry import ToolRegistryNew
 from engine.modules.assistant.runtime.rag_context import RAG_WORKFLOW_INSTRUCTIONS
+from engine.modules.assistant.runtime.drive_context import DRIVE_WORKFLOW_INSTRUCTIONS
 from engine.modules.assistant.tools.exceptions import LLMInitializationError
 
 logger = logging.getLogger(__name__)
@@ -44,15 +45,19 @@ class SimpleReactiveType:
         tool_text = "\n## AVAILABLE TOOLS\n\n"
         for tool in tools:
             tool_text += f"### {tool.name.upper()}\n{tool.get_instruction()}\n\n"
-        has_rag = any(t.name == "rag_search" for t in tools)
-        workflow = (
-            RAG_WORKFLOW_INSTRUCTIONS
-            if has_rag
-            else (
+
+        workflow = ""
+        if any(t.name == "rag_search" for t in tools):
+            workflow += RAG_WORKFLOW_INSTRUCTIONS
+        if any(t.name == "drive_search" for t in tools):
+            workflow += DRIVE_WORKFLOW_INSTRUCTIONS
+
+        if not workflow:
+            workflow = (
                 "\n## WORKFLOW\n"
                 "1. Always call emit_ui_blocks once with your final answer.\n"
             )
-        )
+
         today = datetime.utcnow().strftime("%Y-%m-%d")
         return f"Today's date is {today} (UTC).\n\n{base}{tool_text}{workflow}"
 
