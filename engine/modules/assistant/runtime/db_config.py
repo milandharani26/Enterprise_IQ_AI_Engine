@@ -8,7 +8,9 @@ from engine.modules.assistant.assistant_models import Assistant
 from engine.modules.assistant.runtime.rag_context import RAG_DOCUMENT_ASSISTANT_PROMPT
 from engine.shared.config.settings import get_settings
 
-_TOOL_KEYS = frozenset({"tool_id", "credential_key", "credential_id", "config", "usage_instructions"})
+_TOOL_KEYS = frozenset(
+    {"tool_id", "credential_key", "credential_id", "config", "usage_instructions"}
+)
 _GUARDRAIL_KEYS = frozenset({"type", "instructions", "enforcement", "is_enabled"})
 
 

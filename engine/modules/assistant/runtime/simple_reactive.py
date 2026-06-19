@@ -37,15 +37,21 @@ class SimpleReactiveType:
                 tools.append(ToolRegistryNew.get_tool(tool_id)())
         return tools
 
-    def get_system_instruction(self, config_dict: Dict[str, Any], tools: List[BaseTool]) -> str:
+    def get_system_instruction(
+        self, config_dict: Dict[str, Any], tools: List[BaseTool]
+    ) -> str:
         base = config_dict.get("system_instruction", "")
         tool_text = "\n## AVAILABLE TOOLS\n\n"
         for tool in tools:
             tool_text += f"### {tool.name.upper()}\n{tool.get_instruction()}\n\n"
         has_rag = any(t.name == "rag_search" for t in tools)
-        workflow = RAG_WORKFLOW_INSTRUCTIONS if has_rag else (
-            "\n## WORKFLOW\n"
-            "1. Always call emit_ui_blocks once with your final answer.\n"
+        workflow = (
+            RAG_WORKFLOW_INSTRUCTIONS
+            if has_rag
+            else (
+                "\n## WORKFLOW\n"
+                "1. Always call emit_ui_blocks once with your final answer.\n"
+            )
         )
         today = datetime.utcnow().strftime("%Y-%m-%d")
         return f"Today's date is {today} (UTC).\n\n{base}{tool_text}{workflow}"

@@ -453,6 +453,10 @@ class RAGSearchTool(BaseTool):
             raw_query[:80],
             result,
         )
+
+        logger.info("Raw Query: %s", raw_query)
+        logger.info("Processed Queries: %s", result)
+
         return result or [cleaned]
 
     # ─────────────────────────────────────────────────────────────────────────
