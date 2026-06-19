@@ -33,9 +33,6 @@ class SimpleReactiveType:
                         usage_instructions=t.get("usage_instructions", ""),
                     )
                 )
-        for tool_id in ("emit_ui_blocks",):
-            if not any(tool.name == tool_id for tool in tools):
-                tools.append(ToolRegistryNew.get_tool(tool_id)())
         return tools
 
     def get_system_instruction(
@@ -52,14 +49,20 @@ class SimpleReactiveType:
         if any(t.name == "drive_search" for t in tools):
             workflow += DRIVE_WORKFLOW_INSTRUCTIONS
 
-        if not workflow:
-            workflow = (
-                "\n## WORKFLOW\n"
-                "1. Always call emit_ui_blocks once with your final answer.\n"
-            )
+
 
         today = datetime.utcnow().strftime("%Y-%m-%d")
-        return f"Today's date is {today} (UTC).\n\n{base}{tool_text}{workflow}"
+        
+        guardrails = config_dict.get("guardrails", [])
+        guardrails_text = ""
+        if guardrails:
+            guardrails_text = "\n## GUARDRAILS & RESTRICTIONS\nYou must strictly follow these rules:\n"
+            for g in guardrails:
+                if g.get("is_enabled", True) and g.get("instructions"):
+                    enforcement = str(g.get("enforcement", "moderate")).upper()
+                    guardrails_text += f"- [{enforcement} PRIORITY]: {g['instructions']}\n"
+
+        return f"Today's date is {today} (UTC).\n\n{base}{tool_text}{workflow}{guardrails_text}"
 
     def build_graph(self, config_dict: Dict[str, Any], ctx: ToolContext = None):
         llm_config = config_dict.get("llm_config", {}) or {}
