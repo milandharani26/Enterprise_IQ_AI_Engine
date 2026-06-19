@@ -33,7 +33,7 @@ class JWTService:
             return {}
 
     def verify_token(self, token: str, verify_exp: bool = True) -> dict:
-        """Decode and verify token. Can ignore expiry if needed."""
+        """Decode and verify token. Can ignore expiry if needed. Also checks service token secret."""
         try:
             return jwt.decode(
                 token, 
@@ -41,12 +41,16 @@ class JWTService:
                 algorithms=[self.algorithm],
                 options={"verify_exp": verify_exp}
             )
-        except ExpiredSignatureError:
-            return {}
-        except JWTError:
-            return {}
         except Exception:
-            return {}
+            try:
+                return jwt.decode(
+                    token, 
+                    settings.service_token_secret_key, 
+                    algorithms=[self.algorithm],
+                    options={"verify_exp": verify_exp}
+                )
+            except Exception:
+                return {}
 
     def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> tuple[str, datetime]:
         payload = data.copy()

@@ -1,0 +1,98 @@
+import asyncio
+import logging
+from datetime import datetime, timezone, timedelta
+from engine.shared.db.session import AsyncSessionLocal
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
+from engine.shared.models.connector_model import Connector
+from engine.shared.models.credential_model import Credential
+from engine.shared.integrations.google_drive_client import GoogleDriveClient
+from engine.modules.drive_documents.drive_documents_service import DriveDocumentService
+
+logger = logging.getLogger(__name__)
+
+async def _sync_drive_for_workspace(session, connector: Connector, credential: Credential):
+    try:
+        if not credential.auth_data:
+            return
+            
+        client = GoogleDriveClient(auth_data=credential.auth_data)
+        
+        # We look for files modified in the last 10 minutes to cover our polling interval
+        # In a robust system, we would track the last_sync_time per workspace.
+        time_threshold = (datetime.now(timezone.utc) - timedelta(minutes=10)).strftime('%Y-%m-%dT%H:%M:%S')
+        query = f"modifiedTime > '{time_threshold}' and mimeType != 'application/vnd.google-apps.folder'"
+        
+        # Add standard filter to exclude unsupported
+        query += (
+            " and mimeType != 'application/vnd.google-apps.shortcut'"
+            " and mimeType != 'application/vnd.google-apps.form'"
+            " and mimeType != 'application/vnd.google-apps.site'"
+            " and mimeType != 'application/vnd.google-apps.map'"
+        )
+
+        files = client.list_files(query=query)
+        if not files:
+            return
+
+        logger.info(f"Drive Sync: Found {len(files)} updated files for workspace {connector.organization_id}")
+        
+        service = DriveDocumentService(session)
+        from engine.shared.schemas.drive_document_schema import DriveDocumentIngestRequest
+        
+        for file in files:
+            req = DriveDocumentIngestRequest(
+                drive_file_id=file.get("id"),
+                title=file.get("name"),
+                web_view_link=file.get("webViewLink"),
+                web_content_link=file.get("webContentLink"),
+                mime_type=file.get("mimeType"),
+                file_size_bytes=int(file.get("size", 0)),
+                last_modified_in_drive=file.get("modifiedTime")
+            )
+            # Add owners if present
+            owners = file.get("owners", [])
+            if owners:
+                req.owner_email = owners[0].get("emailAddress")
+                
+            parents = file.get("parents", [])
+            if parents:
+                req.drive_folder_id = parents[0]
+
+            await service.create_drive_document(req, connector.organization_id)
+            
+    except Exception as e:
+        logger.error(f"Drive Sync failed for workspace {connector.organization_id}: {e}")
+
+async def run_drive_sync_poll():
+    """Background task that polls Google Drive for changes every 5 minutes."""
+    while True:
+        try:
+            logger.info("Starting Google Drive Sync Polling cycle...")
+            async with AsyncSessionLocal() as session:
+                # Find all enabled google_drive connectors with a valid credential mapped
+                result = await session.execute(
+                    select(Connector)
+                    .where(Connector.connector_id == 'google_drive', Connector.status == 'enabled', Connector.credential_id.isnot(None))
+                )
+                connectors = result.scalars().all()
+                
+                for connector in connectors:
+                    # Fetch the credential
+                    cred_res = await session.execute(
+                        select(Credential).where(Credential.id == connector.credential_id)
+                    )
+                    credential = cred_res.scalars().first()
+                    
+                    if credential:
+                        await _sync_drive_for_workspace(session, connector, credential)
+        
+        except asyncio.CancelledError:
+            logger.info("Google Drive Sync Poller stopped.")
+            break
+        except Exception as e:
+            logger.error(f"Error in Drive Sync Poller loop: {e}")
+            
+        # Poll every 5 minutes
+        await asyncio.sleep(300)

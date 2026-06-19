@@ -24,22 +24,32 @@ class SimpleReactiveType:
     def _get_tools(self, tools_config: List[Dict[str, Any]] = None) -> List[BaseTool]:
         tools: List[BaseTool] = []
         for t in tools_config or []:
-            if isinstance(t, dict) and t.get("tool_id"):
-                tool_class = ToolRegistryNew.get_tool(t["tool_id"])
-                tools.append(
-                    tool_class(
-                        config=t.get("config", {}),
-                        credential_id=t.get("credential_id"),
-                        usage_instructions=t.get("usage_instructions", ""),
+            tool_id = t.get("tool_id") or t.get("id")
+            if isinstance(t, dict) and tool_id:
+                tool_class = ToolRegistryNew.get_tool(tool_id)
+                if tool_class:
+                    tools.append(
+                        tool_class(
+                            config=t.get("config", {}),
+                            credential_id=t.get("credential_id") or t.get("credential"),
+                            usage_instructions=t.get("usage_instructions") or t.get("instructions") or "",
+                        )
                     )
-                )
         for tool_id in ("emit_ui_blocks",):
             if not any(tool.name == tool_id for tool in tools):
                 tools.append(ToolRegistryNew.get_tool(tool_id)())
         return tools
 
     def get_system_instruction(self, config_dict: Dict[str, Any], tools: List[BaseTool]) -> str:
-        base = config_dict.get("system_instruction", "")
+        base = config_dict.get("system_prompt") or config_dict.get("system_instruction") or ""
+        
+        guardrails_config = config_dict.get("guardrails") or []
+        if guardrails_config:
+            base += "\n\n## GUARDRAILS\nYou MUST adhere strictly to the following rules:\n"
+            for g in guardrails_config:
+                if g.get("enabled", True):
+                    base += f"- [{g.get('type')}] ({g.get('enforcement')}): {g.get('instructions')}\n"
+
         tool_text = "\n## AVAILABLE TOOLS\n\n"
         for tool in tools:
             tool_text += f"### {tool.name.upper()}\n{tool.get_instruction()}\n\n"

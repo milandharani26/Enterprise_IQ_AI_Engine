@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from engine.shared.core.deps import get_db, get_current_organization_id
 from engine.modules.auth.auth_models import User
 from engine.modules.assistant.assistant_schemas import (
-    AssistantCreate, AssistantUpdate, AssistantResponse, AssistantStatusUpdate, ToolInfoResponse
+    AssistantCreate, AssistantUpdate, AssistantResponse, AssistantStatusUpdate, ToolInfoResponse,
+    PreviewPromptRequest, PreviewPromptResponse
 )
 from engine.modules.assistant.assistant_service import AssistantService
 from engine.modules.assistant.tools.tool_registry import ToolRegistryNew
@@ -29,6 +30,14 @@ async def get_available_tools(
             default_instructions=tool_instance.properties.default_instructions
         ))
     return result
+
+@router.post("/preview-prompt", response_model=PreviewPromptResponse)
+async def preview_prompt(
+    preview_request: PreviewPromptRequest,
+    current_user: User = Depends(require_admin),
+):
+    """Preview the compiled prompt and its metadata before saving an assistant."""
+    return await AssistantService.preview_prompt(preview_request)
 
 @router.post("", response_model=AssistantResponse, status_code=status.HTTP_201_CREATED)
 async def create_assistant(

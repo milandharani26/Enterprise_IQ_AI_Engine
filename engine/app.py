@@ -97,6 +97,15 @@ def create_app() -> FastAPI:
         logger.setLevel(logging.DEBUG if settings.ENV == "local" else logging.INFO)
         logger.info(f"🚀 Engine starting — env={settings.ENV}")
 
+        # Start background workers
+        try:
+            import asyncio
+            from engine.shared.workers.drive_sync_worker import run_drive_sync_poll
+            asyncio.create_task(run_drive_sync_poll())
+            logger.info("✅ Background workers started")
+        except Exception as e:
+            logger.warning(f"Failed to start background workers: {e}")
+
         # Register document loaders for ingestion pipeline
         try:
             from engine.pipelines.ingestion.loaders import register_all_loaders

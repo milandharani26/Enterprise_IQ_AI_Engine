@@ -48,3 +48,16 @@ class ToolInfoResponse(BaseModel):
     description: str
     category: str
     default_instructions: Optional[str] = None
+
+class PreviewPromptRequest(BaseModel):
+    system_prompt: Optional[str] = None
+    tools: Optional[List[Dict[str, Any]]] = None
+    guardrails: Optional[List[Dict[str, Any]]] = None
+    type: str = Field(default="simple_reactive", max_length=50)
+
+class PreviewPromptResponse(BaseModel):
+    compiled_prompt: str
+    estimated_tokens: int
+    status: str
+    warnings: List[str]
+
