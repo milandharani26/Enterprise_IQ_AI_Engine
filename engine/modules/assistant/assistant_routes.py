@@ -6,11 +6,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from engine.shared.core.deps import get_db, get_current_organization_id
 from engine.modules.auth.auth_models import User
 from engine.modules.assistant.assistant_schemas import (
-    AssistantCreate, AssistantUpdate, AssistantResponse, AssistantStatusUpdate
+    AssistantCreate, AssistantUpdate, AssistantResponse, AssistantStatusUpdate, ToolInfoResponse
 )
 from engine.modules.assistant.assistant_service import AssistantService
+from engine.modules.assistant.tools.tool_registry import ToolRegistryNew
 
 router = APIRouter(prefix="/assistants", tags=["assistants"])
+
+@router.get("/tools", response_model=List[ToolInfoResponse])
+async def get_available_tools(
+    current_user: User = Depends(require_admin),
+):
+    """Get list of available tools from the registry."""
+    tools = ToolRegistryNew.get_available_tools()
+    result = []
+    for tool_cls in tools:
+        tool_instance = tool_cls()
+        result.append(ToolInfoResponse(
+            tool_id=tool_instance.name,
+            description=tool_instance.properties.description,
+            category=tool_instance.properties.category,
+            default_instructions=tool_instance.properties.default_instructions
+        ))
+    return result
 
 @router.post("", response_model=AssistantResponse, status_code=status.HTTP_201_CREATED)
 async def create_assistant(

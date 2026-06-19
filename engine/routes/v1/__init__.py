@@ -6,6 +6,7 @@ from engine.modules.service_account import router as service_account_router
 from engine.modules.conversation import conversation_router
 from engine.modules.organization import organization_router
 from engine.modules.documents import router as documents_router
+from engine.modules.drive_documents import router as drive_documents_router
 from engine.modules.database_connector.routes import router as db_connector_router
 
 router = APIRouter()
@@ -17,5 +18,11 @@ router.include_router(auth_router)
 router.include_router(service_account_router)
 router.include_router(conversation_router)
 router.include_router(organization_router)
+from engine.api.v1.endpoints.credentials import router as credentials_router
+from engine.api.v1.endpoints.connectors import router as connectors_router
+
 router.include_router(documents_router)
+router.include_router(drive_documents_router)
+router.include_router(credentials_router, prefix="/credentials", tags=["credentials"])
+router.include_router(connectors_router, prefix="/connectors", tags=["connectors"])
 router.include_router(db_connector_router)

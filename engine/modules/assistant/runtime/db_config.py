@@ -19,9 +19,24 @@ def _normalize_tools(raw: Any) -> list[dict[str, Any]]:
     for t in raw:
         if not isinstance(t, dict):
             continue
-        cleaned = {k: t[k] for k in _TOOL_KEYS if k in t}
-        if cleaned.get("tool_id"):
-            out.append(cleaned)
+            
+        # Map frontend keys to backend keys
+        tool_id = t.get("tool_id") or t.get("id")
+        usage = t.get("usage_instructions") or t.get("instructions")
+        cred = t.get("credential_id") or t.get("credential")
+        
+        if not tool_id:
+            continue
+            
+        cleaned = {
+            "tool_id": tool_id,
+            "usage_instructions": usage or "",
+            "config": t.get("config", {})
+        }
+        if cred and cred != "none":
+            cleaned["credential_id"] = cred
+            
+        out.append(cleaned)
     return out
 
 
@@ -44,11 +59,13 @@ def _normalize_guardrails(raw: Any) -> list[dict[str, Any]]:
     return out
 
 
+from engine.modules.assistant.runtime.drive_context import DRIVE_DOCUMENT_ASSISTANT_PROMPT
+
 def _build_llm_config(tools: list[dict[str, Any]] | None = None) -> Dict[str, Any]:
     settings = get_settings()
     max_tokens = int(settings.default_llm_max_tokens)
     # RAG agents need multiple LLM turns (tool call + answer); 512 is too low.
-    if any(t.get("tool_id") == "rag_search" for t in (tools or [])):
+    if any(t.get("tool_id") in ("rag_search", "drive_search") for t in (tools or [])):
         max_tokens = max(max_tokens, 2048)
     return {
         "provider": settings.default_llm_provider,
@@ -62,11 +79,12 @@ def assistant_row_to_config_dict(assistant: Assistant) -> Dict[str, Any]:
     tools = _normalize_tools(assistant.tools)
     instruction = (assistant.system_prompt or "").strip()
     if not instruction:
-        instruction = (
-            RAG_DOCUMENT_ASSISTANT_PROMPT.strip()
-            if any(t.get("tool_id") == "rag_search" for t in tools)
-            else "You are a helpful assistant."
-        )
+        if any(t.get("tool_id") == "rag_search" for t in tools):
+            instruction = RAG_DOCUMENT_ASSISTANT_PROMPT.strip()
+        elif any(t.get("tool_id") == "drive_search" for t in tools):
+            instruction = DRIVE_DOCUMENT_ASSISTANT_PROMPT.strip()
+        else:
+            instruction = "You are a helpful assistant."
     cfg: Dict[str, Any] = {
         "assistant_id": str(assistant.assistant_id),
         "name": assistant.assistant_name,
