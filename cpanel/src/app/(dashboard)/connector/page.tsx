@@ -14,6 +14,12 @@ import {
   Plus
 } from 'lucide-react';
 import { useIntegrationStore, Connector } from '@/store/useIntegrationStore';
+import { 
+  useDatabaseConnections, 
+  useUpdateDatabaseConnection, 
+  useSyncDatabaseConnection 
+} from '@/hooks/api/useDatabaseConnections';
+import toast from 'react-hot-toast';
 
 export default function ConnectorPage() {
   const { connectors, credentials, updateConnector } = useIntegrationStore();
@@ -22,7 +28,41 @@ export default function ConnectorPage() {
   const [activeTab, setActiveTab] = useState<'connectors' | 'test'>('connectors');
   const [selectedCredentialId, setSelectedCredentialId] = useState<string>('');
 
-  const handleToggle = (connector: Connector) => {
+  // API Hooks
+  const { data: dbConnections, isLoading: isDbLoading } = useDatabaseConnections();
+  const updateDbConn = useUpdateDatabaseConnection();
+  const syncDbConn = useSyncDatabaseConnection();
+
+  // Find active / mapped database connections
+  const activePgConn = dbConnections?.find(c => c.database_type === 'postgresql' && c.is_active);
+  const activeMySqlConn = dbConnections?.find(c => c.database_type === 'mysql' && c.is_active);
+
+  // Map PostgreSQL and MySQL connectors based on real backend data
+  const derivedConnectors = connectors.map(conn => {
+    if (conn.id === 'postgres') {
+      return {
+        ...conn,
+        enabled: !!activePgConn,
+        credentialMapped: !!activePgConn,
+        credentialId: activePgConn?.id,
+        syncStatus: activePgConn?.sync_status,
+        lastSyncedAt: activePgConn?.last_synced_at
+      };
+    }
+    if (conn.id === 'mysql') {
+      return {
+        ...conn,
+        enabled: !!activeMySqlConn,
+        credentialMapped: !!activeMySqlConn,
+        credentialId: activeMySqlConn?.id,
+        syncStatus: activeMySqlConn?.sync_status,
+        lastSyncedAt: activeMySqlConn?.last_synced_at
+      };
+    }
+    return conn;
+  });
+
+  const handleToggle = async (connector: Connector) => {
     if (!connector.enabled) {
       // Opening modal to configure before enabling
       setSelectedConnector(connector);
@@ -30,17 +70,46 @@ export default function ConnectorPage() {
       setIsModalOpen(true);
     } else {
       // Disable directly
-      updateConnector(connector.id, { enabled: false, credentialMapped: false, credentialId: undefined });
+      if (connector.id === 'postgres' || connector.id === 'mysql') {
+        const activeConnId = connector.credentialId;
+        if (activeConnId) {
+          try {
+            await updateDbConn.mutateAsync({ id: activeConnId, data: { is_active: false } });
+            toast.success(`${connector.name} connector disabled.`);
+          } catch (e) {
+            console.error(e);
+            toast.error(`Failed to disable ${connector.name} connector.`);
+          }
+        }
+      } else {
+        updateConnector(connector.id, { enabled: false, credentialMapped: false, credentialId: undefined });
+      }
     }
   };
 
-  const handleSaveAndEnable = () => {
+  const handleSaveAndEnable = async () => {
     if (selectedConnector) {
-      updateConnector(selectedConnector.id, { 
-        enabled: true, 
-        credentialMapped: !!selectedCredentialId,
-        credentialId: selectedCredentialId || undefined
-      });
+      if (selectedConnector.id === 'postgres' || selectedConnector.id === 'mysql') {
+        if (!selectedCredentialId) {
+          toast.error("Please select a credential.");
+          return;
+        }
+        try {
+          await updateDbConn.mutateAsync({ id: selectedCredentialId, data: { is_active: true } });
+          // Start the schema sync immediately
+          await syncDbConn.mutateAsync(selectedCredentialId);
+          toast.success(`${selectedConnector.name} connector enabled and schema sync started!`);
+        } catch (e) {
+          console.error(e);
+          toast.error(`Failed to enable ${selectedConnector.name} connector.`);
+        }
+      } else {
+        updateConnector(selectedConnector.id, { 
+          enabled: true, 
+          credentialMapped: !!selectedCredentialId,
+          credentialId: selectedCredentialId || undefined
+        });
+      }
       setIsModalOpen(false);
       setSelectedConnector(null);
     }
@@ -48,7 +117,19 @@ export default function ConnectorPage() {
 
   // Filter credentials matching the selected connector's provider
   const availableCredentials = selectedConnector 
-    ? credentials.filter(c => c.provider.toLowerCase() === selectedConnector.provider.toLowerCase())
+    ? (selectedConnector.provider.toLowerCase() === 'google'
+        ? credentials.filter(c => c.provider.toLowerCase() === 'google')
+        : (dbConnections || []).map(db => ({
+            id: db.id,
+            name: `${db.name} (${db.host})`,
+            provider: db.database_type === 'postgresql' ? 'PostgreSQL' : 'MySQL',
+            status: db.sync_status || 'pending',
+            database_type: db.database_type
+          })).filter(c => {
+            if (selectedConnector.id === 'postgres') return c.database_type === 'postgresql';
+            if (selectedConnector.id === 'mysql') return c.database_type === 'mysql';
+            return false;
+          }))
     : [];
 
   const getColorClasses = (colorBase: string) => {
@@ -102,7 +183,7 @@ export default function ConnectorPage() {
       {/* Grid Section */}
       {activeTab === 'connectors' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {connectors.map(connector => {
+          {derivedConnectors.map(connector => {
             const colors = getColorClasses(connector.colorBase);
             const Icon = connector.icon;
             
@@ -155,6 +236,28 @@ export default function ConnectorPage() {
                 <p className={`text-sm ${connector.credentialMapped ? 'text-gray-800 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}`}>
                   {connector.credentialMapped ? 'Credentials successfully mapped.' : 'No credential mapped yet.'}
                 </p>
+
+                {connector.enabled && (connector.id === 'postgres' || connector.id === 'mysql') && (
+                  <div className="mt-4 pt-4 border-t border-black/5 dark:border-white/5 flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Sync Status</span>
+                      <span className={`text-sm font-semibold capitalize ${
+                        connector.syncStatus === 'synced' ? 'text-emerald-600 dark:text-emerald-400' :
+                        connector.syncStatus === 'syncing' ? 'text-blue-600 dark:text-blue-400 animate-pulse' :
+                        connector.syncStatus === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'
+                      }`}>
+                        {connector.syncStatus || 'Pending'}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => connector.credentialId && syncDbConn.mutate(connector.credentialId)}
+                      disabled={connector.syncStatus === 'syncing'}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-900 dark:text-white transition-colors disabled:opacity-50"
+                    >
+                      {connector.syncStatus === 'syncing' ? 'Syncing...' : 'Sync Schema'}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}

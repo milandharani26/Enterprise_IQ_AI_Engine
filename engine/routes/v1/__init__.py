@@ -6,6 +6,7 @@ from engine.modules.service_account import router as service_account_router
 from engine.modules.conversation import conversation_router
 from engine.modules.organization import organization_router
 from engine.modules.documents import router as documents_router
+from engine.modules.database_connector.routes import router as db_connector_router
 
 router = APIRouter()
 
@@ -17,3 +18,4 @@ router.include_router(service_account_router)
 router.include_router(conversation_router)
 router.include_router(organization_router)
 router.include_router(documents_router)
+router.include_router(db_connector_router)

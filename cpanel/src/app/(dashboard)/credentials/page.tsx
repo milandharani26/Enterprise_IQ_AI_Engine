@@ -12,8 +12,9 @@ import {
   Globe
 } from 'lucide-react';
 import { useIntegrationStore } from '@/store/useIntegrationStore';
+import { useDatabaseConnections, useCreateDatabaseConnection } from '@/hooks/api/useDatabaseConnections';
 
-const PROVIDERS = ['Google', 'PostgreSQL'];
+const PROVIDERS = ['Google', 'PostgreSQL', 'MySQL'];
 
 export default function CredentialsPage() {
   const { credentials, addCredential, deleteCredential } = useIntegrationStore();
@@ -23,21 +24,69 @@ export default function CredentialsPage() {
   // Modal State
   const [provider, setProvider] = useState('');
   const [name, setName] = useState('');
+  
+  // Database State
+  const [dbHost, setDbHost] = useState('');
+  const [dbPort, setDbPort] = useState('5432');
+  const [dbUser, setDbUser] = useState('');
+  const [dbPass, setDbPass] = useState('');
+  const [dbName, setDbName] = useState('');
+  const [dbSchema, setDbSchema] = useState('');
 
-  const filteredCredentials = credentials.filter(c =>
+  // API Hooks
+  const { data: dbConnections, isLoading } = useDatabaseConnections();
+  const createDbConn = useCreateDatabaseConnection();
+
+  // Merge local credentials and db connections for display
+  const allCredentials = [
+    ...credentials,
+    ...(dbConnections || []).map(db => ({
+      id: db.id,
+      name: db.name,
+      provider: db.database_type === 'postgresql' ? 'PostgreSQL' : 'MySQL',
+      status: db.sync_status === 'synced' ? 'Active' : db.sync_status || 'Pending',
+      lastUsed: new Date(db.last_synced_at || db.created_at)
+    }))
+  ];
+
+  const filteredCredentials = allCredentials.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.provider.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (name && provider) {
-      addCredential({
-        name,
-        provider,
-      });
+      if (provider === 'PostgreSQL' || provider === 'MySQL') {
+        try {
+          await createDbConn.mutateAsync({
+            name,
+            database_type: provider.toLowerCase(),
+            host: dbHost,
+            port: parseInt(dbPort),
+            username: dbUser,
+            password: dbPass,
+            database_name: dbName,
+            schema_name: dbSchema || null
+          });
+        } catch (e) {
+          console.error("Failed to create database connection", e);
+          return;
+        }
+      } else {
+        addCredential({
+          name,
+          provider,
+        });
+      }
       setIsModalOpen(false);
       setName('');
       setProvider('');
+      setDbHost('');
+      setDbPort('5432');
+      setDbUser('');
+      setDbPass('');
+      setDbName('');
+      setDbSchema('');
     }
   };
 
@@ -229,36 +278,36 @@ export default function CredentialsPage() {
                     </>
                   )}
 
-                  {provider === 'PostgreSQL' && (
+                  {(provider === 'PostgreSQL' || provider === 'MySQL') && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Host *</label>
-                        <input type="text" placeholder="localhost" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input value={dbHost} onChange={(e) => setDbHost(e.target.value)} type="text" placeholder="localhost" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Port *</label>
-                        <input type="text" placeholder="5432" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input value={dbPort} onChange={(e) => setDbPort(e.target.value)} type="text" placeholder="5432" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Username *</label>
-                        <input type="text" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input value={dbUser} onChange={(e) => setDbUser(e.target.value)} type="text" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Password *</label>
-                        <input type="password" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input value={dbPass} onChange={(e) => setDbPass(e.target.value)} type="password" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Database *</label>
-                        <input type="text" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input value={dbName} onChange={(e) => setDbName(e.target.value)} type="text" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                       <div className="col-span-2 md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Schema</label>
-                        <input type="text" placeholder="public" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
+                        <input value={dbSchema} onChange={(e) => setDbSchema(e.target.value)} type="text" placeholder="public" className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow" />
                       </div>
                     </div>
                   )}
 
-                  {provider !== 'Google' && provider !== 'PostgreSQL' && provider !== '' && (
+                  {provider !== 'Google' && provider !== 'PostgreSQL' && provider !== 'MySQL' && provider !== '' && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">API Key / Secret</label>
                       <input

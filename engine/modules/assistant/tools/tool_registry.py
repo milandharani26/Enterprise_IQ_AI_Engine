@@ -3,6 +3,7 @@ from typing import Dict, List, Type
 from engine.modules.assistant.tools.base_tool import BaseTool
 from engine.modules.assistant.tools.implementations.emit_ui_blocks import EmitUIBlocksTool
 from engine.modules.assistant.tools.implementations.rag_search import RAGSearchTool
+from engine.modules.assistant.tools.implementations.sql_query import SqlQueryTool
 
 
 class ToolRegistryNew:
@@ -30,3 +31,4 @@ class ToolRegistryNew:
 
 ToolRegistryNew.register_tool(EmitUIBlocksTool)
 ToolRegistryNew.register_tool(RAGSearchTool)
+ToolRegistryNew.register_tool(SqlQueryTool)

@@ -15,6 +15,10 @@ from engine.modules.assistant.runtime.rag_context import (
     enrich_config_for_rag,
     fetch_indexed_document_inventory,
 )
+from engine.modules.assistant.runtime.sql_context import (
+    assistant_has_sql_tool,
+    enrich_config_for_sql,
+)
 from engine.modules.assistant.tools.base_tool import ToolContext
 
 logger = logging.getLogger(__name__)
@@ -108,18 +112,32 @@ class AssistantExecutor:
         organization_ids: List[str],
         assistant: Assistant,
     ) -> Tuple[str, list]:
+        config_dict = assistant_row_to_config_dict(assistant)
+        if assistant_has_rag_tool(config_dict):
+            inventory = await fetch_indexed_document_inventory(organization_id)
+            config_dict = enrich_config_for_rag(config_dict, inventory)
+
+        if assistant_has_sql_tool(config_dict):
+            config_dict = enrich_config_for_sql(config_dict)
+
+        # Extract and format guardrails
+        guardrails_list = config_dict.get("guardrails", [])
+        guardrails_str = ""
+        if guardrails_list:
+            guardrails_str = "\n".join([
+                f"- {g.get('type')}: {g.get('instructions')}"
+                for g in guardrails_list
+                if g.get("is_enabled", True)
+            ])
+
         organization_id = str(organization_ids[0]) if organization_ids else None
         context = ToolContext(
             organization_id=organization_id,
             conversation_id=conversation_id,
             assistant_id=assistant_id,
             user_id=user_id,
+            guardrails=guardrails_str
         )
-
-        config_dict = assistant_row_to_config_dict(assistant)
-        if assistant_has_rag_tool(config_dict):
-            inventory = await fetch_indexed_document_inventory(organization_id)
-            config_dict = enrich_config_for_rag(config_dict, inventory)
 
         assistant_instance = AssistantFactory.get_assistant(config=config_dict)
         agent, _system_instruction, _tools = assistant_instance.build_graph(

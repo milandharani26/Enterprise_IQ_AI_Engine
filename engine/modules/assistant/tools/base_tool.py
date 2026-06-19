@@ -21,6 +21,7 @@ class ToolContext(BaseModel):
     has_attachments: bool = False
     created_by: Optional[str] = None
     attachment_ids: Optional[List[str]] = None
+    guardrails: Optional[str] = None
 
 
 class ToolProperties(BaseModel):

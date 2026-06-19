@@ -32,10 +32,14 @@ def _normalize_guardrails(raw: Any) -> list[dict[str, Any]]:
     for g in raw:
         if not isinstance(g, dict):
             continue
-        cleaned = {k: g[k] for k in _GUARDRAIL_KEYS if k in g}
+        is_enabled = g.get("is_enabled", g.get("enabled", True))
+        cleaned = {
+            "type": g.get("type"),
+            "instructions": g.get("instructions"),
+            "enforcement": g.get("enforcement", "moderate"),
+            "is_enabled": is_enabled
+        }
         if cleaned.get("type") and cleaned.get("instructions"):
-            if "enforcement" not in cleaned:
-                cleaned["enforcement"] = "moderate"
             out.append(cleaned)
     return out
 

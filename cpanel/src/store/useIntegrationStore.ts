@@ -33,6 +33,7 @@ interface IntegrationState {
 const INITIAL_CONNECTORS: Connector[] = [
   { id: 'google_drive', name: 'Google Drive', provider: 'Google', icon: HardDrive, colorBase: 'blue', enabled: false, credentialMapped: false },
   { id: 'postgres', name: 'PostgreSQL', provider: 'PostgreSQL', icon: Database, colorBase: 'indigo', enabled: false, credentialMapped: false },
+  { id: 'mysql', name: 'MySQL', provider: 'MySQL', icon: Database, colorBase: 'orange', enabled: false, credentialMapped: false },
 ];
 
 export const useIntegrationStore = create<IntegrationState>((set) => ({

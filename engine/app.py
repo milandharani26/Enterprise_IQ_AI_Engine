@@ -34,7 +34,7 @@ def create_app() -> FastAPI:
         o.strip()
         for o in settings.CORS_ORIGINS.split(",")
         if o.strip()
-    ] if getattr(settings, "CORS_ORIGINS", None) else ["http://localhost:3000", "http://127.0.0.1:3000"]
+    ] if getattr(settings, "CORS_ORIGINS", None) else ["http://localhost:5000", "http://127.0.0.1:5000"]
     
     app.add_middleware(
         CORSMiddleware,

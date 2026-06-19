@@ -43,7 +43,7 @@ export default function AssistantDetailsClient() {
     guardrails: []
   });
 
-  const [newTool, setNewTool] = useState({ id: 'rag_search', credential: 'none', instructions: '' });
+  const [newTool, setNewTool] = useState({ tool_id: 'rag_search', credential_id: 'none', usage_instructions: '' });
   const [newGuardrail, setNewGuardrail] = useState({ type: '', instructions: '', enforcement: 'block', enabled: true });
 
   useEffect(() => {
@@ -248,8 +248,8 @@ export default function AssistantDetailsClient() {
                         <Blocks size={14} />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-sm font-semibold text-primary-text">{t.id}</span>
-                        <span className="text-xs text-muted-text">{t.credential === 'none' ? 'No Credential' : 'API Key Required'}</span>
+                        <span className="text-sm font-semibold text-primary-text">{t.tool_id || t.id}</span>
+                        <span className="text-xs text-muted-text">{(t.credential_id || t.credential) === 'none' ? 'No Credential' : 'API Key Required'}</span>
                       </div>
                     </div>
                     <Button 
@@ -347,10 +347,11 @@ export default function AssistantDetailsClient() {
             label="Tool ID" 
             options={[
               { label: 'rag_search', value: 'rag_search' },
+              { label: 'sql_query', value: 'sql_query' },
               { label: 'fetch_weather', value: 'fetch_weather' },
             ]}
-            value={newTool.id}
-            onChange={(e) => setNewTool({ ...newTool, id: e.target.value })}
+            value={newTool.tool_id}
+            onChange={(e) => setNewTool({ ...newTool, tool_id: e.target.value })}
           />
           <Select 
             label="Credential" 
@@ -358,18 +359,18 @@ export default function AssistantDetailsClient() {
               { label: 'None', value: 'none' },
               { label: 'API Key', value: 'api_key' },
             ]}
-            value={newTool.credential}
-            onChange={(e) => setNewTool({ ...newTool, credential: e.target.value })}
+            value={newTool.credential_id}
+            onChange={(e) => setNewTool({ ...newTool, credential_id: e.target.value })}
           />
           <Textarea 
             label="Usage instructions" 
             placeholder="When and how the model should use this tool"
             className="min-h-[100px]"
-            value={newTool.instructions}
-            onChange={(e) => setNewTool({ ...newTool, instructions: e.target.value })}
+            value={newTool.usage_instructions}
+            onChange={(e) => setNewTool({ ...newTool, usage_instructions: e.target.value })}
           />
           <div className="p-3 bg-tertiary-bg border border-border-color rounded-lg flex items-center text-xs text-secondary-text">
-            Additional config is disabled for <code className="mx-1 px-1.5 py-0.5 bg-secondary-bg rounded text-primary-text">{newTool.id}</code>.
+            Additional config is disabled for <code className="mx-1 px-1.5 py-0.5 bg-secondary-bg rounded text-primary-text">{newTool.tool_id}</code>.
           </div>
           
           <div className="flex items-center justify-end gap-3 mt-2 pt-4 border-t border-border-color">
@@ -378,7 +379,7 @@ export default function AssistantDetailsClient() {
             </Button>
             <Button variant="primary" type="button" onClick={() => {
               setFormData({ ...formData, tools: [...formData.tools, newTool] });
-              setNewTool({ id: 'rag_search', credential: 'none', instructions: '' });
+              setNewTool({ tool_id: 'rag_search', credential_id: 'none', usage_instructions: '' });
               setIsToolModalOpen(false); 
               toast.success('Tool added to assistant draft. Click Save Changes to apply.'); 
             }}>
