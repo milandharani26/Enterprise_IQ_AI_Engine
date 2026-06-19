@@ -412,6 +412,49 @@ class RAGSearchTool(BaseTool):
 
         return [query]
 
+    async def _preprocess_query_fast(self, raw_query: str) -> List[str]:
+        """
+        Fast preprocessing pipeline for a raw user query (no LLM expansion).
+
+        Steps (in order):
+        1. Strip filler words
+        2. Try compound decomposition (splits on 'and'/'or')
+
+        Does NOT call _expand_short_query() — faster but no variant generation.
+        """
+        cleaned = self._strip_filler(raw_query)
+        parts = self._decompose_compound_query(cleaned)
+        return parts
+
+    async def _expand_query_variants_async(
+        self,
+        base_queries: List[str],
+    ) -> List[str]:
+        """
+        Expand short queries (≤3 words) with LLM-generated variants.
+
+        Used as a background task — fast path skips this entirely,
+        but when invoked it adds recall-boosting paraphrases for
+        short segments while leaving longer queries untouched.
+        """
+        expanded: List[str] = []
+        for query in base_queries:
+            if len(query.split()) <= 3:
+                variants = await self._expand_short_query(query)
+                expanded.extend(variants)
+            else:
+                expanded.append(query)
+
+        seen: set = set()
+        result: List[str] = []
+        for q in expanded:
+            key = q.lower().strip()
+            if key not in seen:
+                seen.add(key)
+                result.append(q)
+
+        return result
+
     async def _preprocess_query(self, raw_query: str) -> List[str]:
         """
         Full preprocessing pipeline for a raw user query.
@@ -886,40 +929,33 @@ class RAGSearchTool(BaseTool):
     # Search orchestration — Phase 1 multi-query with RRF
     # ─────────────────────────────────────────────────────────────────────────
 
-    async def _search_async(
+    async def _execute_multi_query_search(
         self,
-        query: str,
+        query_variants: List[str],
         organization_id: Optional[str],
         top_k: int,
         similarity_threshold: float,
         use_pool: bool = True,
     ) -> List[Dict[str, Any]]:
         """
-        Phase 1 multi-query search with Reciprocal Rank Fusion.
+        Execute parallel multi-query vector search with RRF merge.
 
-        Steps:
-        1. Preprocess raw query → list of 1–N query strings
-        2. Embed all variants in parallel (single asyncio.gather call)
-        3. Search all variants in parallel
-        4. Merge results with RRF → return top_k unique chunks
-        5. Fallback to keyword search if no vector results at all
+        Given preprocessed query variants, this method:
+        1. Embeds all variants in parallel
+        2. Searches all variants in parallel
+        3. Merges results with Reciprocal Rank Fusion
+
+        Does NOT perform preprocessing or keyword fallback — those are
+        the caller's responsibility.
         """
-        # ── Step 1: preprocess ────────────────────────────────────────────────
-        query_variants = await self._preprocess_query(query)
+        # Over-fetch per variant so RRF has enough candidates to rerank
+        fetch_k = min(top_k * 3, 20)
 
-        # ── Step 2: embed all variants in parallel ────────────────────────────
-        # Over-fetch per variant (top_k * 3) so RRF has enough candidates to
-        # rerank — final list is then trimmed to top_k after merging.
-        fetch_k = min(top_k * 3, 20)  # cap at 20 (max allowed by input schema)
         vectors = await self._embed_queries_parallel(query_variants)
-
         if not vectors:
-            logger.warning(
-                "[RAGSearchTool] All embeddings failed — trying keyword search"
-            )
-            return await self._keyword_search(query, organization_id, top_k, use_pool)
+            logger.warning("[RAGSearchTool] All embeddings failed")
+            return []
 
-        # ── Step 3: search all variants in parallel ───────────────────────────
         search_tasks = [
             self._vector_search(
                 query_vector=vec,
@@ -945,31 +981,95 @@ class RAGSearchTool(BaseTool):
             elif res:
                 result_lists.append(res)
 
-        # ── Step 4: merge with RRF ────────────────────────────────────────────
-        if result_lists:
-            if len(result_lists) == 1:
-                # Only one variant returned results — skip RRF overhead
-                chunks = result_lists[0][:top_k]
-            else:
-                chunks = self._reciprocal_rank_fusion(result_lists, top_k)
-        else:
-            chunks = []
+        if not result_lists:
+            return []
 
-        # ── Step 5: keyword fallback ──────────────────────────────────────────
-        if not chunks:
+        if len(result_lists) == 1:
+            return result_lists[0][:top_k]
+
+        return self._reciprocal_rank_fusion(result_lists, top_k)
+
+    async def _search_async(
+        self,
+        query: str,
+        organization_id: Optional[str],
+        top_k: int,
+        similarity_threshold: float,
+        use_pool: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """
+        Phase 1 multi-query search with Reciprocal Rank Fusion.
+
+        Steps:
+        1. Preprocess raw query → list of 1–N query strings
+        2. Delegate to _execute_multi_query_search for embed/search/RRF
+        3. Fallback to keyword search if no vector results at all
+        """
+        search_start = time.perf_counter()
+        base_queries = await self._preprocess_query_fast(query)
+        expansion_task = asyncio.create_task(
+            self._expand_query_variants_async(base_queries)
+        )
+
+        primary_chunks = await self._execute_multi_query_search(
+            query_variants=base_queries,
+            organization_id=organization_id,
+            top_k=top_k,
+            similarity_threshold=similarity_threshold,
+            use_pool=use_pool,
+        )
+
+        if not primary_chunks:
             logger.info(
                 "[RAGSearchTool] No vector hits for any variant — keyword fallback (org=%s)",
                 organization_id,
             )
-            chunks = await self._keyword_search(query, organization_id, top_k, use_pool)
+            primary_chunks = await self._keyword_search(query, organization_id, top_k, use_pool)
 
         logger.info(
-            "[RAGSearchTool] Final: %d chunks (variants=%d, org=%s)",
-            len(chunks),
-            len(query_variants),
+            "Primary search completed in %.2fs",
+            time.perf_counter() - search_start,
+        )
+
+        try:
+            expanded_queries = await asyncio.wait_for(expansion_task, timeout=3)
+        except Exception:
+            expanded_queries = base_queries
+
+        logger.info(
+            "Expansion completed in %.2fs",
+            time.perf_counter() - search_start,
+        )
+
+        if set(expanded_queries) == set(base_queries):
+            return primary_chunks
+
+        expanded_chunks = await self._execute_multi_query_search(
+            query_variants=expanded_queries,
+            organization_id=organization_id,
+            top_k=top_k,
+            similarity_threshold=similarity_threshold,
+            use_pool=use_pool,
+        )
+
+        final_chunks = self._reciprocal_rank_fusion(
+            [primary_chunks, expanded_chunks],
+            top_k,
+        )
+
+        logger.info(
+            "Total search completed in %.2fs",
+            time.perf_counter() - search_start,
+        )
+
+        logger.info(
+            "[RAGSearchTool] Final: %d chunks (variants=%d, expanded=%d, org=%s)",
+            len(final_chunks),
+            len(base_queries),
+            len(expanded_queries),
             organization_id,
         )
-        return chunks
+        return final_chunks
 
     # ─────────────────────────────────────────────────────────────────────────
     # Public entry points

@@ -11,11 +11,12 @@ from langchain_core.language_models import BaseChatModel
 from engine.shared.config import get_settings
 
 
-
 class LLMProviderBase(ABC):
     """Base class for LLM providers."""
 
-    def __init__(self, model_id: str, api_key: str = "", config: dict[str, Any] | None = None):
+    def __init__(
+        self, model_id: str, api_key: str = "", config: dict[str, Any] | None = None
+    ):
         self.model_id = model_id
         self.api_key = api_key
         self.config = config or {}
@@ -41,9 +42,11 @@ class LLMProviderFactory:
     @classmethod
     def register(cls, name: str):
         """Decorator to register a provider class."""
+
         def wrapper(provider_cls: type[LLMProviderBase]):
             cls._providers[name] = provider_cls
             return provider_cls
+
         return wrapper
 
     @classmethod
@@ -60,7 +63,9 @@ class LLMProviderFactory:
                 f"Unknown LLM provider '{provider}'. "
                 f"Available: {list(cls._providers.keys())}"
             )
-        return cls._providers[provider](model_id=model_id, api_key=api_key, config=config)
+        return cls._providers[provider](
+            model_id=model_id, api_key=api_key, config=config
+        )
 
     @classmethod
     def available_providers(cls) -> list[str]:
