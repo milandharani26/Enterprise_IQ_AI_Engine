@@ -58,7 +58,14 @@ class AuthMiddleware:
         from engine.modules.auth.auth_models import User
         token = request.cookies.get("access_token")
         if not token:
-            raise self._auth_error("Missing access token cookie")
+            auth_header = request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                token = auth_header.replace("Bearer ", "", 1).strip()
+            elif request.headers.get("X-API-Key"):
+                token = request.headers.get("X-API-Key")
+                
+        if not token:
+            raise self._auth_error("Missing access token cookie or Authorization header")
 
         payload = self._jwt.verify_token(token)
         if not payload:
@@ -97,10 +104,10 @@ class AuthMiddleware:
         that ``account_type == 'admin'``. Raises 403 otherwise.
         """
         current_user = await self.get_current_user(request, db)
-        if current_user.account_type != "admin":
+        if current_user.account_type not in ["admin", "service_account"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail={"success": False, "message": "Admin privileges required"},
+                detail={"success": False, "message": "Admin or Service privileges required"},
             )
         return current_user
 
