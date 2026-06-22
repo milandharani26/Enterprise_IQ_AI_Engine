@@ -23,7 +23,7 @@ def _normalize_tools(raw: Any) -> list[dict[str, Any]]:
             continue
             
         # Map frontend keys to backend keys
-        tool_id = t.get("tool_id") or t.get("id")
+        tool_id = t.get("id") or t.get("tool_id")
         usage = t.get("usage_instructions") or t.get("instructions")
         cred = t.get("credential_id") or t.get("credential")
         
@@ -49,10 +49,14 @@ def _normalize_guardrails(raw: Any) -> list[dict[str, Any]]:
     for g in raw:
         if not isinstance(g, dict):
             continue
-        cleaned = {k: g[k] for k in _GUARDRAIL_KEYS if k in g}
+        is_enabled = g.get("is_enabled", g.get("enabled", True))
+        cleaned = {
+            "type": g.get("type"),
+            "instructions": g.get("instructions"),
+            "enforcement": g.get("enforcement", "moderate"),
+            "is_enabled": is_enabled
+        }
         if cleaned.get("type") and cleaned.get("instructions"):
-            if "enforcement" not in cleaned:
-                cleaned["enforcement"] = "moderate"
             out.append(cleaned)
     return out
 
@@ -63,7 +67,7 @@ def _build_llm_config(tools: list[dict[str, Any]] | None = None) -> Dict[str, An
     settings = get_settings()
     max_tokens = int(settings.default_llm_max_tokens)
     # RAG agents need multiple LLM turns (tool call + answer); 512 is too low.
-    if any(t.get("tool_id") in ("rag_search", "drive_search") for t in (tools or [])):
+    if any(t.get("tool_id") in ("rag_search", "drive_search", "sql_query") for t in (tools or [])):
         max_tokens = max(max_tokens, 2048)
     return {
         "provider": settings.default_llm_provider,
@@ -81,6 +85,8 @@ def assistant_row_to_config_dict(assistant: Assistant) -> Dict[str, Any]:
             instruction = RAG_DOCUMENT_ASSISTANT_PROMPT.strip()
         elif any(t.get("tool_id") == "drive_search" for t in tools):
             instruction = DRIVE_DOCUMENT_ASSISTANT_PROMPT.strip()
+        elif any(t.get("tool_id") == "sql_query" for t in tools):
+            instruction = "You are a database assistant for this organization. You help users query SQL databases securely."
         else:
             instruction = "You are a helpful assistant."
     cfg: Dict[str, Any] = {

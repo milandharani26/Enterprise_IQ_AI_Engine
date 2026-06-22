@@ -14,6 +14,7 @@ class ToolCategory(str, Enum):
 
 class ToolContext(BaseModel):
     """Runtime context passed to assistant tools during chat."""
+
     organization_id: Optional[str] = None
     conversation_id: str
     assistant_id: str
@@ -21,6 +22,7 @@ class ToolContext(BaseModel):
     has_attachments: bool = False
     created_by: Optional[str] = None
     attachment_ids: Optional[List[str]] = None
+    guardrails: Optional[str] = None
 
 
 class ToolProperties(BaseModel):
@@ -59,14 +61,35 @@ class BaseTool:
     def _run(self, ctx: ToolContext, **kwargs) -> Any:
         raise NotImplementedError
 
+    async def _arun(self, ctx: ToolContext, **kwargs) -> Any:
+        raise NotImplementedError
+
     def as_langchain_tool(self, ctx: ToolContext) -> StructuredTool:
-        def run(**kwargs) -> str:
+        def run(**kwargs):
             result = self._run(ctx=ctx, **kwargs)
             return result if isinstance(result, str) else str(result)
 
-        return StructuredTool.from_function(
+        async def arun(**kwargs):
+            try:
+                result = await self._arun(ctx=ctx, **kwargs)
+            except NotImplementedError:
+                import asyncio
+                result = await asyncio.to_thread(self._run, ctx=ctx, **kwargs)
+            return result if isinstance(result, str) else str(result)
+
+        tool = StructuredTool.from_function(
             name=self.name,
             description=self.properties.description,
             func=run,
+            coroutine=arun,
             args_schema=self.properties.input_schema,
         )
+
+        # Fix: remove additionalProperties from schema — unsupported by Claude/Anthropic
+        if hasattr(tool, "args_schema") and tool.args_schema:
+            schema = tool.args_schema.model_json_schema()
+            schema.pop("additionalProperties", None)
+            for prop in schema.get("properties", {}).values():
+                prop.pop("additionalProperties", None)
+
+        return tool

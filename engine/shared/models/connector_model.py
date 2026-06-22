@@ -26,6 +26,9 @@ class Connector(Base):
         ForeignKey("public.credentials.id", ondelete="SET NULL"),
         nullable=True,
     )
+    sync_status = Column(String(50), nullable=True)
+    last_synced_at = Column(DateTime, nullable=True)
+    sync_error = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(
         DateTime,

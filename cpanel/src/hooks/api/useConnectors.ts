@@ -1,8 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+import { apiClient } from '@/lib/api-client';
 import { toast } from 'react-hot-toast';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export interface Connector {
   id: string;
@@ -12,6 +10,9 @@ export interface Connector {
   provider: string;
   status: string; // 'enabled' | 'disabled'
   credential_id: string | null;
+  sync_status?: string | null;
+  sync_error?: string | null;
+  last_synced_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -24,7 +25,7 @@ export const useConnectorsHooks = () => {
       queryKey: ['connectors', organizationId],
       queryFn: async () => {
         if (!organizationId) return [];
-        const { data } = await axios.get(`${API_URL}/connectors/organization/${organizationId}`);
+        const { data } = await apiClient.get(`/connectors/organization/${organizationId}`);
         return data as Connector[];
       },
       enabled: !!organizationId,
@@ -34,7 +35,7 @@ export const useConnectorsHooks = () => {
   const useAddConnectorMutation = () => {
     return useMutation({
       mutationFn: async (newConnector: { organization_id: string; connector_id: string; name: string; provider: string; status?: string; credential_id?: string | null }) => {
-        const { data } = await axios.post(`${API_URL}/connectors/`, newConnector);
+        const { data } = await apiClient.post(`/connectors/`, newConnector);
         return data as Connector;
       },
       onSuccess: (_, variables) => {
@@ -46,7 +47,7 @@ export const useConnectorsHooks = () => {
   const useUpdateConnectorMutation = () => {
     return useMutation({
       mutationFn: async ({ id, updates }: { id: string; updates: { name?: string; status?: string; credential_id?: string | null } }) => {
-        const { data } = await axios.patch(`${API_URL}/connectors/${id}`, updates);
+        const { data } = await apiClient.patch(`/connectors/${id}`, updates);
         return data as Connector;
       },
       onSuccess: () => {
@@ -59,9 +60,26 @@ export const useConnectorsHooks = () => {
     });
   };
 
+  const useSyncConnectorMutation = () => {
+    return useMutation({
+      mutationFn: async (id: string) => {
+        const { data } = await apiClient.post(`/connectors/${id}/sync`);
+        return data;
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['connectors'] });
+        toast.success('Connector sync started');
+      },
+      onError: (error: any) => {
+        toast.error(error?.response?.data?.detail || 'Failed to start connector sync');
+      },
+    });
+  };
+
   return {
     useConnectorsQuery,
     useAddConnectorMutation,
     useUpdateConnectorMutation,
+    useSyncConnectorMutation,
   };
 };

@@ -12,6 +12,7 @@ from engine.modules.assistant.tools.base_tool import BaseTool, ToolContext
 from engine.modules.assistant.tools.tool_registry import ToolRegistryNew
 from engine.modules.assistant.runtime.rag_context import RAG_WORKFLOW_INSTRUCTIONS
 from engine.modules.assistant.runtime.drive_context import DRIVE_WORKFLOW_INSTRUCTIONS
+from engine.modules.assistant.runtime.sql_context import SQL_WORKFLOW_INSTRUCTIONS
 from engine.modules.assistant.tools.exceptions import LLMInitializationError
 
 logger = logging.getLogger(__name__)
@@ -24,21 +25,42 @@ class SimpleReactiveType:
     def _get_tools(self, tools_config: List[Dict[str, Any]] = None) -> List[BaseTool]:
         tools: List[BaseTool] = []
         for t in tools_config or []:
-            if isinstance(t, dict) and t.get("tool_id"):
-                tool_class = ToolRegistryNew.get_tool(t["tool_id"])
-                tools.append(
-                    tool_class(
-                        config=t.get("config", {}),
-                        credential_id=t.get("credential_id"),
-                        usage_instructions=t.get("usage_instructions", ""),
+            tool_id = t.get("id") or t.get("tool_id")
+            if isinstance(t, dict) and tool_id:
+                tool_class = ToolRegistryNew.get_tool(tool_id)
+                if tool_class:
+                    tools.append(
+                        tool_class(
+                            config=t.get("config", {}),
+                            credential_id=t.get("credential_id") or t.get("credential"),
+                            usage_instructions=t.get("usage_instructions")
+                            or t.get("instructions")
+                            or "",
+                        )
                     )
-                )
+        for tool_id in ("emit_ui_blocks",):
+            if not any(tool.name == tool_id for tool in tools):
+                tools.append(ToolRegistryNew.get_tool(tool_id)())
         return tools
 
     def get_system_instruction(
         self, config_dict: Dict[str, Any], tools: List[BaseTool]
     ) -> str:
-        base = config_dict.get("system_instruction", "")
+        base = (
+            config_dict.get("system_prompt")
+            or config_dict.get("system_instruction")
+            or ""
+        )
+
+        guardrails_config = config_dict.get("guardrails") or []
+        if guardrails_config:
+            base += (
+                "\n\n## GUARDRAILS\nYou MUST adhere strictly to the following rules:\n"
+            )
+            for g in guardrails_config:
+                if g.get("enabled", True):
+                    base += f"- [{g.get('type')}] ({g.get('enforcement')}): {g.get('instructions')}\n"
+
         tool_text = "\n## AVAILABLE TOOLS\n\n"
         for tool in tools:
             tool_text += f"### {tool.name.upper()}\n{tool.get_instruction()}\n\n"
@@ -48,11 +70,17 @@ class SimpleReactiveType:
             workflow += RAG_WORKFLOW_INSTRUCTIONS
         if any(t.name == "drive_search" for t in tools):
             workflow += DRIVE_WORKFLOW_INSTRUCTIONS
+        if any(t.name == "sql_query" for t in tools):
+            workflow += SQL_WORKFLOW_INSTRUCTIONS
 
-
+        if not workflow:
+            workflow = (
+                "\n## WORKFLOW\n"
+                "1. Always call emit_ui_blocks once with your final answer.\n"
+            )
 
         today = datetime.utcnow().strftime("%Y-%m-%d")
-        
+
         guardrails = config_dict.get("guardrails", [])
         guardrails_text = ""
         if guardrails:
@@ -60,7 +88,9 @@ class SimpleReactiveType:
             for g in guardrails:
                 if g.get("is_enabled", True) and g.get("instructions"):
                     enforcement = str(g.get("enforcement", "moderate")).upper()
-                    guardrails_text += f"- [{enforcement} PRIORITY]: {g['instructions']}\n"
+                    guardrails_text += (
+                        f"- [{enforcement} PRIORITY]: {g['instructions']}\n"
+                    )
 
         return f"Today's date is {today} (UTC).\n\n{base}{tool_text}{workflow}{guardrails_text}"
 
@@ -84,8 +114,8 @@ class SimpleReactiveType:
         )
         return agent, system_instruction, langchain_tools
 
-    def invoke(self, agent, query: str, session_id: str):
-        return agent.invoke(
+    async def invoke(self, agent, query: str, session_id: str):
+        return await agent.ainvoke(
             {"messages": [HumanMessage(content=query)]},
             config={"configurable": {"thread_id": session_id}},
         )

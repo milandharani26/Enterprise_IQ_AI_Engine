@@ -26,6 +26,9 @@ class ConnectorResponse(ConnectorBase):
     id: UUID
     organization_id: UUID
     credential_id: Optional[UUID] = None
+    sync_status: Optional[str] = None
+    last_synced_at: Optional[datetime] = None
+    sync_error: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

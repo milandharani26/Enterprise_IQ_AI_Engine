@@ -33,7 +33,7 @@ def create_app() -> FastAPI:
     _cors_origins = (
         [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
         if getattr(settings, "CORS_ORIGINS", None)
-        else ["http://localhost:3000", "http://127.0.0.1:3000"]
+        else ["http://localhost:5000", "http://127.0.0.1:5000"]
     )
 
     app.add_middleware(
@@ -106,6 +106,16 @@ def create_app() -> FastAPI:
         setup_logging(service_name="engine")
         logger.setLevel(logging.DEBUG if settings.ENV == "local" else logging.INFO)
         logger.info(f"🚀 Engine starting — env={settings.ENV}")
+
+        # Start background workers
+        try:
+            import asyncio
+            from engine.shared.workers.drive_sync_worker import run_drive_sync_poll
+
+            asyncio.create_task(run_drive_sync_poll())
+            logger.info("✅ Background workers started")
+        except Exception as e:
+            logger.warning(f"Failed to start background workers: {e}")
 
         # Register document loaders for ingestion pipeline
         try:
