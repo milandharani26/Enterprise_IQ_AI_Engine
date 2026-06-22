@@ -73,6 +73,7 @@ class SqlGenerationService:
             "1. Output ONLY the raw SQL query without any markdown formatting, backticks, or explanations.\n"
             "2. Ensure the query is read-only (SELECT only).\n"
             "3. Limit the results to 100 rows maximum if no specific limit is requested.\n"
+            "4. ALWAYS use double quotes around ALL table and column names (e.g., \"createdAt\") to preserve case sensitivity.\n"
         )
 
         prompt = PromptTemplate.from_template(
