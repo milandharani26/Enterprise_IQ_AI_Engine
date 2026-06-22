@@ -37,8 +37,7 @@ def _fix_markdown_links(text: str) -> str:
     """Fixes broken markdown links where LLMs insert newlines between brackets and parens."""
     if not text or not isinstance(text, str):
         return text
-    # Match any whitespace (space, newline, etc) between ] and (
-    return re.sub(r'\]\s+\(\s*(https?://)', r'](\1', text)
+    return re.sub(r"\]\s+\(\s*(https?://)", r"](\1", text)
 
 
 def _extract_response_text(result: dict) -> str:
@@ -46,7 +45,7 @@ def _extract_response_text(result: dict) -> str:
     if not messages:
         return str(result.get("final_output", "No response generated"))
 
-    # Prefer the last AIMessage with non-empty text (final turn may be empty after tool calls).
+    # 1. Prefer the last AIMessage with non-empty text content.
     for msg in reversed(messages):
         if not isinstance(msg, AIMessage):
             continue
@@ -64,7 +63,7 @@ def _extract_response_text(result: dict) -> str:
         if text:
             return _fix_markdown_links(text)
 
-    # emit_ui_blocks returns JSON in a ToolMessage
+    # 2. emit_ui_blocks ToolMessage — extract markdown block text.
     for msg in reversed(messages):
         if (
             isinstance(msg, ToolMessage)
@@ -73,10 +72,33 @@ def _extract_response_text(result: dict) -> str:
             try:
                 parsed = json.loads(msg.content or "")
                 for block in parsed.get("blocks") or []:
-                    if block.get("type") == "markdown" and block.get("data", {}).get("content"):
+                    if block.get("type") == "markdown" and block.get("data", {}).get(
+                        "content"
+                    ):
                         return _fix_markdown_links(block["data"]["content"])
             except (json.JSONDecodeError, TypeError):
                 pass
+
+    # 3. FIX: Fallback — read sql_query ToolMessage directly.
+    #    This fires when the LLM calls sql_query but fails to follow up with
+    #    emit_ui_blocks or a non-empty AIMessage, causing "No response generated".
+    for msg in reversed(messages):
+        if isinstance(msg, ToolMessage) and getattr(msg, "name", "") == "sql_query":
+            content = str(getattr(msg, "content", "") or "").strip()
+            if content:
+                logger.warning(
+                    "LLM did not produce a final AIMessage after sql_query — "
+                    "returning tool result directly. Check that the agent loops "
+                    "back to the LLM after tool execution."
+                )
+                return _fix_markdown_links(content)
+
+    # 4. Last resort: any non-empty ToolMessage.
+    for msg in reversed(messages):
+        if isinstance(msg, ToolMessage):
+            content = str(getattr(msg, "content", "") or "").strip()
+            if content:
+                return _fix_markdown_links(content)
 
     return "No response generated"
 
@@ -84,6 +106,7 @@ def _extract_response_text(result: dict) -> str:
 def _extract_content_blocks(result: dict, fallback_text: str) -> list:
     messages = result.get("messages") or []
 
+    # 1. emit_ui_blocks ToolMessage.
     for msg in reversed(messages):
         if (
             isinstance(msg, ToolMessage)
@@ -94,12 +117,17 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
                 blocks = parsed.get("blocks")
                 if blocks:
                     for b in blocks:
-                        if b.get("type") == "markdown" and "content" in b.get("data", {}):
-                            b["data"]["content"] = _fix_markdown_links(b["data"]["content"])
+                        if b.get("type") == "markdown" and "content" in b.get(
+                            "data", {}
+                        ):
+                            b["data"]["content"] = _fix_markdown_links(
+                                b["data"]["content"]
+                            )
                     return blocks
             except (json.JSONDecodeError, TypeError):
                 pass
 
+    # 2. emit_ui_blocks in AIMessage tool_calls args.
     for msg in reversed(messages):
         if not isinstance(msg, AIMessage):
             continue
@@ -110,10 +138,15 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
                 blocks = args.get("blocks")
                 if blocks:
                     for b in blocks:
-                        if b.get("type") == "markdown" and "content" in b.get("data", {}):
-                            b["data"]["content"] = _fix_markdown_links(b["data"]["content"])
+                        if b.get("type") == "markdown" and "content" in b.get(
+                            "data", {}
+                        ):
+                            b["data"]["content"] = _fix_markdown_links(
+                                b["data"]["content"]
+                            )
                     return blocks
 
+    # 3. JSON blocks embedded in content string.
     for msg in reversed(messages):
         content = getattr(msg, "content", "")
         if isinstance(content, str) and content.strip().startswith("{"):
@@ -122,12 +155,18 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
                 if isinstance(parsed, dict) and parsed.get("blocks"):
                     blocks = parsed["blocks"]
                     for b in blocks:
-                        if b.get("type") == "markdown" and "content" in b.get("data", {}):
-                            b["data"]["content"] = _fix_markdown_links(b["data"]["content"])
+                        if b.get("type") == "markdown" and "content" in b.get(
+                            "data", {}
+                        ):
+                            b["data"]["content"] = _fix_markdown_links(
+                                b["data"]["content"]
+                            )
                     return blocks
             except json.JSONDecodeError:
                 pass
 
+    # 4. FIX: If fallback_text came from sql_query tool result, wrap it in a
+    #    markdown block so the UI renders it instead of showing nothing.
     return [
         {
             "type": "markdown",
@@ -147,10 +186,10 @@ class AssistantExecutor:
         organization_ids: List[str],
         assistant: Assistant,
     ) -> Tuple[str, list]:
-        print(f"\n{'='*50}\nDEBUG POINT: executor calle")
-        print(f"DEBUG POINT: user give this chat: {query}\n{'='*50}")
+        logger.info(f"Executor called for query: {query}")
         organization_id = str(organization_ids[0]) if organization_ids else None
         config_dict = assistant_row_to_config_dict(assistant)
+
         if assistant_has_rag_tool(config_dict):
             inventory = await fetch_indexed_document_inventory(organization_id)
             config_dict = enrich_config_for_rag(config_dict, inventory)
@@ -196,6 +235,13 @@ class AssistantExecutor:
         except Exception as e:
             logger.exception("AGENT INVOCATION FAILED")
             raise
+
+        # Debug: log all messages to help trace issues
+        for i, msg in enumerate(result.get("messages", [])):
+            logger.debug(
+                f"[msg {i}] {type(msg).__name__} name={getattr(msg, 'name', '-')} "
+                f"content={str(getattr(msg, 'content', ''))[:200]}"
+            )
 
         response_text = _extract_response_text(result)
         content_blocks = _extract_content_blocks(result, response_text)

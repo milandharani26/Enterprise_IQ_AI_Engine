@@ -246,6 +246,7 @@ class SqlQueryTool(BaseTool):
                     rows,
                     row_count,
                 )
+                print(f"DEBUG POINT: formatted response = {response_str[:300]}")
 
                 success = True
 
