@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { Send, Bot, User, Sparkles, Trash2, ChevronDown, FileText } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { useConversationHooks } from '@/hooks/api/useConversation';
 import { useAssistantsHooks, Assistant } from '@/hooks/api/useAssistants';
 import { useDocumentsHooks } from '@/hooks/api/useDocuments';
@@ -60,6 +61,8 @@ export default function ChatPage() {
   const { user, activeOrganizationId, hasHydrated } = useAppStore();
   const { useSendChatMessageMutation } = useConversationHooks();
   const { useAssistantsQuery } = useAssistantsHooks();
+  const searchParams = useSearchParams();
+  const assistantIdParam = searchParams?.get('assistantId');
   const { useDocumentsQuery } = useDocumentsHooks();
   const { data: assistants = [], isLoading: assistantsLoading } = useAssistantsQuery();
   const { data: documentsResponse } = useDocumentsQuery(activeOrganizationId, {
@@ -87,13 +90,23 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<any[]>([]);
 
   useEffect(() => {
-    if (enabledAssistants.length && !selectedAssistant) {
+    if (!enabledAssistants.length) return;
+
+    if (assistantIdParam) {
+      const fromParam = enabledAssistants.find((a: Assistant) => a.assistant_id === assistantIdParam);
+      if (fromParam && selectedAssistant?.assistant_id !== assistantIdParam) {
+        setSelectedAssistant(fromParam);
+        return;
+      }
+    }
+
+    if (!selectedAssistant && !assistantIdParam) {
       const withRag = enabledAssistants.find((a: Assistant) =>
         a.tools?.some((t: any) => t.tool_id === 'rag_search')
       );
       setSelectedAssistant(withRag || enabledAssistants[0]);
     }
-  }, [enabledAssistants, selectedAssistant]);
+  }, [enabledAssistants, selectedAssistant?.assistant_id, assistantIdParam]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

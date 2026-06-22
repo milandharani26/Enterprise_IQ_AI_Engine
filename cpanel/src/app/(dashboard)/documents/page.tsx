@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useAppStore } from '@/store/useAppStore';
 import { useDocumentsHooks, DocumentRecord } from '@/hooks/api/useDocuments';
+import { Modal } from '@/components/ui/Modal';
 
 const ACCEPTED_TYPES = '.pdf,.doc,.docx,.txt,.md,.csv,.xlsx,.xls,.pptx,.ppt,.html,.json';
 
@@ -45,6 +46,9 @@ export default function DocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploadingFile, setUploadingFile] = useState<string | null>(null);
+
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [docToDelete, setDocToDelete] = useState<DocumentRecord | null>(null);
 
   const documents = listResponse?.data || [];
 
@@ -93,12 +97,18 @@ export default function DocumentsPage() {
     onFilesSelected(e.dataTransfer.files);
   };
 
-  const handleDelete = async (doc: DocumentRecord) => {
-    if (!activeOrganizationId) return;
-    if (!confirm(`Delete "${doc.title || doc.reference_id}"?`)) return;
+  const handleDeleteClick = (doc: DocumentRecord) => {
+    setDocToDelete(doc);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!activeOrganizationId || !docToDelete) return;
     try {
-      await deleteMutation.mutateAsync({ documentId: doc.id, organizationId: activeOrganizationId });
+      await deleteMutation.mutateAsync({ documentId: docToDelete.id, organizationId: activeOrganizationId });
       toast.success('Document deleted');
+      setIsDeleteModalOpen(false);
+      setDocToDelete(null);
     } catch {
       toast.error('Failed to delete document');
     }
@@ -135,11 +145,10 @@ export default function DocumentsPage() {
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`relative cursor-pointer rounded-2xl border-2 border-dashed p-12 text-center transition-all ${
-            dragOver
-              ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-500/10'
-              : 'border-gray-300 dark:border-white/20 hover:border-blue-400 dark:hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-white/5'
-          }`}
+          className={`relative cursor-pointer rounded-2xl border-2 border-dashed p-12 text-center transition-all ${dragOver
+            ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-500/10'
+            : 'border-gray-300 dark:border-white/20 hover:border-blue-400 dark:hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-white/5'
+            }`}
         >
           <input
             ref={fileInputRef}
@@ -218,7 +227,7 @@ export default function DocumentsPage() {
                   <div className="flex items-center gap-3 shrink-0">
                     {statusBadge(doc.status)}
                     <button
-                      onClick={() => handleDelete(doc)}
+                      onClick={() => handleDeleteClick(doc)}
                       disabled={deleteMutation.isPending}
                       className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                       title="Delete"
@@ -232,6 +241,21 @@ export default function DocumentsPage() {
           )}
         </div>
       </div>
+
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Delete Document"
+        description={`Are you sure you want to delete "${docToDelete?.title || docToDelete?.reference_id || 'this document'}"? This action cannot be undone.`}
+        maxWidth="max-w-md"
+      >
+        <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-border-color">
+          <Button variant="ghost" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+          <Button variant="primary" className="bg-accent-danger hover:bg-accent-danger/90 text-white border-transparent" onClick={confirmDelete} disabled={deleteMutation.isPending}>
+            {deleteMutation.isPending ? 'Deleting...' : 'Yes, Delete Document'}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
