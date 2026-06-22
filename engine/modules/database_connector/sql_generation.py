@@ -27,6 +27,7 @@ class SqlGenerationService:
             "You are a strict security guard. Read the user's question and the security guardrails.\n"
             "Guardrails: {guardrails}\n"
             "Question: {question}\n\n"
+            "Note: General rules about SQL formatting, schema matching, or table/column existence should NOT trigger a violation here, as those are handled by the query generator later. Only flag YES if the question asks for explicitly restricted sensitive data (e.g. passwords, salaries) or violates safety policies.\n\n"
             "Does the question violate the guardrails? Reply strictly with YES or NO."
         )
         
@@ -81,12 +82,14 @@ class SqlGenerationService:
 
         chain = prompt | self.llm
         try:
+            print(f"DEBUG POINT: llm call with embadding (schema context) for question: {question}")
             result = await chain.ainvoke({
                 "question": question,
                 "schema_context": schema_context,
                 "database_type": database_type.upper(),
                 "guardrails": guardrails or ""
             })
+            print(f"DEBUG POINT: llm response and also what response llm give:\n{result.content.strip()}\n{'='*50}")
             return result.content.strip()
         except Exception as e:
             logger.error(f"SQL Generation failed: {e}")

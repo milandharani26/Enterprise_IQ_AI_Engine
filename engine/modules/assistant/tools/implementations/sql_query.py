@@ -70,6 +70,8 @@ class SqlQueryTool(BaseTool):
         self._sql_generation = SqlGenerationService(config)
 
     async def _arun(self, question: str, ctx: ToolContext = None) -> str:
+        print(f"\n{'=' * 50}\nDEBUG POINT: tool called")
+        print(f"DEBUG POINT: user give this chat: {question}\n{'=' * 50}")
         logger.info("=" * 80)
         logger.info("SQL TOOL STARTED")
         logger.info(f"Question: {question}")
@@ -116,6 +118,7 @@ class SqlQueryTool(BaseTool):
 
         async with AsyncSessionLocal() as db:
             try:
+                print(f"DEBUG POINT: query pass for embadding: {question}")
                 logger.info("STEP 2 - Embedding question")
                 q_vec = await self._embedding_service.embed_query(question)
                 logger.info("Embedding completed")
@@ -144,9 +147,7 @@ class SqlQueryTool(BaseTool):
                 db_obj = (
                     (
                         await db.execute(
-                            select(Connector).where(
-                                Connector.id == selected_db_id
-                            )
+                            select(Connector).where(Connector.id == selected_db_id)
                         )
                     )
                     .scalars()
@@ -211,6 +212,7 @@ class SqlQueryTool(BaseTool):
                     return error_msg
 
                 logger.info("STEP 7 - Validating SQL")
+                print(f"DEBUG POINT: query validator called for sql: {generated_sql}")
 
                 is_valid, val_error = SqlValidatorService.validate_sql(generated_sql)
 
@@ -222,6 +224,7 @@ class SqlQueryTool(BaseTool):
                     return f"Failed to validate generated SQL: {val_error}"
 
                 logger.info("STEP 8 - Executing SQL")
+                print(f"DEBUG POINT: about to execute SQL")  # ADD THIS
 
                 columns, rows, row_count = await SqlExecutionService.execute_query(
                     db,
@@ -229,6 +232,9 @@ class SqlQueryTool(BaseTool):
                     org_id,
                     generated_sql,
                 )
+                print(
+                    f"DEBUG POINT: execution done — rows={row_count}, columns={columns}"
+                )  # ADD THIS
 
                 logger.info(f"Rows Returned: {row_count}")
 

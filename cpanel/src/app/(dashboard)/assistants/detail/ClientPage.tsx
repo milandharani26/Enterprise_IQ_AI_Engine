@@ -374,8 +374,8 @@ export default function AssistantDetailsClient() {
           <Select
             label="Tool ID"
             options={availableTools?.map((t: any) => ({ label: t.tool_id, value: t.tool_id })) || []}
-            value={newTool.id}
-            onChange={(e) => setNewTool({ ...newTool, id: e.target.value })}
+            value={newTool.tool_id}
+            onChange={(e) => setNewTool({ ...newTool, tool_id: e.target.value })}
           />
           <Select
             label="Credential"

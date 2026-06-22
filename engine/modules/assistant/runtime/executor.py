@@ -147,6 +147,8 @@ class AssistantExecutor:
         organization_ids: List[str],
         assistant: Assistant,
     ) -> Tuple[str, list]:
+        print(f"\n{'='*50}\nDEBUG POINT: executor calle")
+        print(f"DEBUG POINT: user give this chat: {query}\n{'='*50}")
         organization_id = str(organization_ids[0]) if organization_ids else None
         config_dict = assistant_row_to_config_dict(assistant)
         if assistant_has_rag_tool(config_dict):
