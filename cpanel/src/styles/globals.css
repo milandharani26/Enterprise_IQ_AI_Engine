@@ -2,70 +2,152 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-:root {
-  /* Light Theme Variables */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8f9fa;
-  --bg-tertiary: #f1f3f5;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f8f9fa;
-
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #9ca3af;
-
-  --border-color: #e5e7eb;
-  --border-hover: #d1d5db;
-}
-
-.dark {
-  /* Dark Theme Variables */
-  --bg-primary: #0a0a0b;
-  --bg-secondary: #111113;
-  --bg-tertiary: #1a1a1d;
-  --bg-card: rgba(255, 255, 255, 0.03);
-  --bg-card-hover: rgba(255, 255, 255, 0.06);
-
-  --text-primary: #ffffff;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.15);
-}
-
 @theme {
-  --color-primary-bg: var(--bg-primary);
-  --color-secondary-bg: var(--bg-secondary);
-  --color-tertiary-bg: var(--bg-tertiary);
-  --color-card-bg: var(--bg-card);
-  --color-card-hover: var(--bg-card-hover);
+  --color-primary-bg: var(--color-primary-bg);
+  --color-secondary-bg: var(--color-secondary-bg);
+  --color-card-bg: var(--color-card-bg);
+  --color-card-hover: var(--color-card-hover);
+  --color-tertiary-bg: var(--color-tertiary-bg);
+  
+  --color-primary-text: var(--color-primary-text);
+  --color-secondary-text: var(--color-secondary-text);
+  --color-muted-text: var(--color-muted-text);
+  
+  --color-border-color: var(--color-border-color);
+  --color-border-hover: var(--color-border-hover);
+  
+  --color-accent-primary: var(--color-accent-primary);
+  --color-accent-primary-hover: var(--color-accent-primary-hover);
+  --color-accent-secondary: var(--color-accent-secondary);
+  --color-accent-success: var(--color-accent-success);
+  --color-accent-warning: var(--color-accent-warning);
+  --color-accent-danger: var(--color-accent-danger);
 
-  --color-primary-text: var(--text-primary);
-  --color-secondary-text: var(--text-secondary);
-  --color-muted-text: var(--text-muted);
-
-  --color-accent-primary: #3b82f6;
-  --color-accent-primary-hover: #2563eb;
-  --color-accent-secondary: #8b5cf6;
-  --color-accent-success: #10b981;
-  --color-accent-warning: #f59e0b;
-  --color-accent-danger: #ef4444;
-
-  --color-border-color: var(--border-color);
-  --color-border-hover: var(--border-hover);
-
-  --font-sans: var(--font-plus-jakarta), system-ui, sans-serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), monospace;
 }
 
 @layer base {
+  :root {
+    /* iPhone Glassmorphism Light Mode Variables */
+    --color-primary-bg: #F2F4F7;
+    --color-secondary-bg: rgba(255, 255, 255, 0.6);
+    --color-card-bg: rgba(255, 255, 255, 0.5);
+    --color-card-hover: rgba(255, 255, 255, 0.8);
+    --color-tertiary-bg: rgba(240, 240, 245, 0.4);
+    
+    --color-primary-text: #111111;
+    --color-secondary-text: #555555;
+    --color-muted-text: #888888;
+    
+    --color-border-color: rgba(0, 0, 0, 0.06);
+    --color-border-hover: rgba(0, 0, 0, 0.12);
+    
+    --color-accent-primary: #5B6AF8;
+    --color-accent-primary-hover: #4B5BE8;
+    --color-accent-secondary: #000000;
+    --color-accent-success: #10B981;
+    --color-accent-warning: #F59E0B;
+    --color-accent-danger: #EF4444;
+  }
+
+  .dark {
+    /* iPhone Glassmorphism Dark Mode Variables */
+    --color-primary-bg: #0A0A0C;
+    --color-secondary-bg: rgba(30, 30, 34, 0.6);
+    --color-card-bg: rgba(25, 25, 28, 0.5);
+    --color-card-hover: rgba(40, 40, 45, 0.7);
+    --color-tertiary-bg: rgba(45, 45, 50, 0.4);
+    
+    --color-primary-text: #FFFFFF;
+    --color-secondary-text: #A0A0A5;
+    --color-muted-text: #666666;
+    
+    --color-border-color: rgba(255, 255, 255, 0.08);
+    --color-border-hover: rgba(255, 255, 255, 0.15);
+    
+    --color-accent-primary: #5B6AF8;
+    --color-accent-primary-hover: #6B7AF8;
+    --color-accent-secondary: #FFFFFF;
+    --color-accent-success: #10B981;
+    --color-accent-warning: #F59E0B;
+    --color-accent-danger: #EF4444;
+  }
+
   *, *::before, *::after {
     box-sizing: border-box;
   }
   
   html, body {
-    font-family: var(--font-plus-jakarta), system-ui, sans-serif;
-    @apply m-0 p-0 bg-primary-bg text-primary-text h-full w-full antialiased transition-colors duration-300;
+    font-family: var(--font-inter), system-ui, sans-serif;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.4;
+  }
+
+  body {
+    background: var(--color-primary-bg);
+    color: var(--color-primary-text);
+    animation: fadeIn 120ms ease-in-out;
+  }
+
+  /* Add a subtle mesh gradient to make the glass pop */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: -1;
+    background-image: 
+      radial-gradient(circle at 15% 50%, rgba(91, 106, 248, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
+      radial-gradient(circle at 50% 80%, rgba(245, 158, 11, 0.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  @keyframes slideRight {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes pageEnter {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-cascade-item {
+    animation: slideRight 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-page-enter {
+    animation: pageEnter 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Soft skeleton shimmer */
+  @keyframes smoothPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .animate-brutal-pulse {
+    animation: smoothPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Aggressive typography scale and letter-spacing for headings */
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.02em;
   }
 
   /* Scrollbar styling */
@@ -77,7 +159,7 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-border-color rounded-full;
+    @apply bg-border-color;
   }
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-muted-text;

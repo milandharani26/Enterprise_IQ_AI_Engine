@@ -14,31 +14,38 @@ export function SettingsSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-[260px] h-screen bg-secondary-bg border-r border-border-color flex flex-col fixed top-0 left-0 z-40">
-      <div className="p-6">
-        <Link href="/dashboard" className="inline-flex items-center gap-2 text-secondary-text text-sm font-medium transition-colors duration-150 hover:text-primary-text">
-          <ArrowLeft size={16} />
-          <span>Back to Dashboard</span>
+    <aside className="w-[64px] hover:w-[220px] transition-all duration-300 h-screen bg-secondary-bg backdrop-blur-2xl backdrop-saturate-[180%] shadow-[4px_0_24px_rgba(0,0,0,0.02)] border-r border-border-color flex flex-col fixed top-0 left-0 z-40 group overflow-hidden">
+      <div className="h-[64px] border-b border-border-color flex items-center px-4 shrink-0">
+        <Link href="/dashboard" className="flex items-center gap-4 text-secondary-text hover:text-primary-text transition-colors duration-300 min-w-[200px]">
+          <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-[8px] group-hover:bg-white/10 transition-colors">
+            <ArrowLeft size={18} />
+          </div>
+          <span className="text-[13px] font-bold tracking-tight opacity-0 group-hover:opacity-100 transition-opacity duration-300 truncate uppercase">Dashboard</span>
         </Link>
       </div>
       
-      <div className="px-4 mt-4">
-        <h3 className="text-xs font-semibold text-muted-text tracking-widest mb-3 px-2">SETTINGS</h3>
-        <nav className="flex flex-col gap-[2px]">
+      <div className="py-4 flex flex-col gap-1 overflow-y-auto overflow-x-hidden">
+        <div className="px-4 mb-2 flex items-center min-w-[200px]">
+          <div className="w-8 shrink-0" />
+          <h3 className="text-[11px] font-bold text-muted-text uppercase tracking-[0.06em] opacity-0 group-hover:opacity-100 transition-opacity duration-300">SETTINGS</h3>
+        </div>
+        <nav className="flex flex-col gap-1">
           {settingsNav.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link 
                 key={item.name} 
                 href={item.href} 
-                className={`flex items-center gap-3 py-2 px-3 rounded-md text-sm transition-all duration-150 ${
+                className={`flex items-center gap-4 py-2 px-4 font-medium text-[13px] transition-all duration-300 ${
                   isActive 
-                    ? 'bg-tertiary-bg text-primary-text font-semibold' 
-                    : 'text-secondary-text font-medium hover:bg-card-bg hover:text-primary-text'
+                    ? 'bg-accent-primary/15 text-accent-primary border-r-2 border-accent-primary shadow-[inset_4px_0_15px_rgba(91,106,248,0.1)]' 
+                    : 'text-secondary-text hover:bg-white/20 dark:hover:bg-white/5 hover:text-primary-text border-r-2 border-transparent'
                 }`}
               >
-                <item.icon size={18} />
-                <span>{item.name}</span>
+                <div className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-[8px] transition-colors ${isActive ? 'bg-accent-primary/20 backdrop-blur-md' : 'group-hover:bg-white/10'}`}>
+                  <item.icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-accent-primary" : ""} />
+                </div>
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">{item.name}</span>
               </Link>
             );
           })}

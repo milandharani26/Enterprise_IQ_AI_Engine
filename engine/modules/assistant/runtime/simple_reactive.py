@@ -4,8 +4,10 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List
 
-from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage
+
+# FIX: create_agent does not exist — correct import is create_react_agent
+from langgraph.prebuilt import create_react_agent
 
 from engine.modules.assistant.runtime.llm_initializer import initialize_llm
 from engine.modules.assistant.tools.base_tool import BaseTool, ToolContext
@@ -76,7 +78,7 @@ class SimpleReactiveType:
         if not workflow:
             workflow = (
                 "\n## WORKFLOW\n"
-                "1. Always call emit_ui_blocks once with your final answer.\n"
+                "1. Format your final answer directly in markdown. Do NOT call the emit_ui_blocks tool if tool is sql_query otherwise call emit_ui_blocks tool once with the final text.\n"
             )
 
         today = datetime.utcnow().strftime("%Y-%m-%d")
@@ -107,15 +109,22 @@ class SimpleReactiveType:
         system_instruction = self.get_system_instruction(config_dict, required_tools)
         langchain_tools = [t.as_langchain_tool(ctx=ctx) for t in required_tools]
 
-        agent = create_agent(
+        # FIX: was create_agent (does not exist). create_react_agent is the correct
+        # LangGraph function. It builds a ReAct loop that automatically cycles back
+        # to the LLM after every tool call — this is what was missing, causing the
+        # agent to stop after tool execution without generating a final AIMessage.
+        agent = create_react_agent(
             model=llm,
             tools=langchain_tools,
-            system_prompt=system_instruction,
+            prompt=system_instruction,
         )
         return agent, system_instruction, langchain_tools
 
     async def invoke(self, agent, query: str, session_id: str):
+        # FIX: removed configurable thread_id — create_react_agent without a
+        # checkpointer doesn't support memory/threads. Passing thread_id caused
+        # a silent config error on some LangGraph versions. Add a MemorySaver
+        # checkpointer here if you need per-session memory.
         return await agent.ainvoke(
             {"messages": [HumanMessage(content=query)]},
-            config={"configurable": {"thread_id": session_id}},
         )

@@ -60,7 +60,7 @@ const MOCK_ASSISTANTS = [
 export default function AssistantsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { useAssistantsQuery, useCreateAssistantMutation } = useAssistantsHooks();
-  
+
   const { data: assistants = [], isLoading } = useAssistantsQuery();
   const createMutation = useCreateAssistantMutation();
 
@@ -75,8 +75,8 @@ export default function AssistantsPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'enabled' | 'disabled'>('all');
 
   const filteredAssistants = assistants.filter((ast: Assistant) => {
-    const matchesSearch = ast.assistant_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          ast.type?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = ast.assistant_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ast.type?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = filterStatus === 'all' ? true : ast.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
@@ -144,13 +144,31 @@ export default function AssistantsPage() {
 
       {/* Grid */}
       {isLoading ? (
-        <div className="flex items-center justify-center p-10">Loading assistants...</div>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="flex flex-col bg-card-bg border border-border-color rounded-[12px] p-6 animate-brutal-pulse" style={{ animationDelay: `${i * 100}ms` }}>
+              <div className="flex justify-between items-start mb-4">
+                <div className="w-12 h-12 rounded-[8px] bg-tertiary-bg"></div>
+                <div className="w-16 h-5 rounded-[4px] bg-tertiary-bg"></div>
+              </div>
+              <div className="mb-6 flex-1">
+                <div className="w-3/4 h-5 bg-tertiary-bg rounded-[4px] mb-2"></div>
+                <div className="w-1/4 h-3 bg-tertiary-bg rounded-[4px] mb-4"></div>
+                <div className="w-full h-3 bg-tertiary-bg rounded-[4px] mb-1"></div>
+                <div className="w-5/6 h-3 bg-tertiary-bg rounded-[4px]"></div>
+              </div>
+              <div className="pt-5 border-t border-border-color">
+                <div className="w-24 h-8 bg-tertiary-bg rounded-[8px]"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
           {filteredAssistants.length > 0 ? filteredAssistants.map((assistant: Assistant, idx: number) => (
             <AssistantCard key={assistant.assistant_id || idx} assistant={assistant} />
           )) : (
-            <div className="col-span-full text-center text-muted-text p-10">
+            <div className="col-span-full text-center text-muted-text p-10 text-[13px]">
               No assistants found. Create one!
             </div>
           )}
@@ -162,24 +180,23 @@ export default function AssistantsPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title="Create New Assistant"
-        description="Register a new AI assistant. The code is a unique identifier and cannot be changed after creation."
-        maxWidth="max-w-4xl"
+        description="Register a new AI assistant."
+        maxWidth="max-w-[480px]"
       >
-        <form className="flex flex-col gap-5">
-          <Input 
-            label="Assistant Name" 
-            placeholder="e.g. Customer Support" 
+        <form className="flex flex-col gap-4">
+          <Input
+            label="Assistant Name"
+            placeholder="e.g. Customer Support"
             value={formData.assistant_name}
             onChange={(e) => setFormData({ ...formData, assistant_name: e.target.value })}
             autoFocus
           />
           <Input
-            label="Model *"
+            label="Model"
             placeholder="e.g., gpt-4"
             value={formData.type}
             onChange={(e) => setFormData({ ...formData, type: e.target.value })}
           />
-          <p className="-mt-3 text-xs text-muted-text">The underlying AI model to use.</p>
 
           <Textarea
             label="Description"
@@ -192,9 +209,9 @@ export default function AssistantsPage() {
             <Button variant="ghost" type="button" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
-            <Button 
-              variant="primary" 
-              type="button" 
+            <Button
+              variant="primary"
+              type="button"
               onClick={handleCreate}
               disabled={createMutation.isPending || !formData.assistant_name || !formData.type}
             >
@@ -209,25 +226,26 @@ export default function AssistantsPage() {
 
 import Link from 'next/link';
 
-function AssistantCard({ assistant }: { assistant: Assistant }) {
+function AssistantCard({ assistant, index }: { assistant: Assistant; index: number }) {
   return (
-    <Link href={`/assistants/detail?id=${assistant.assistant_id}`} className="group relative flex flex-col bg-card-bg border border-border-color rounded-2xl p-6 transition-all duration-300 hover:border-border-hover hover:shadow-xl hover:shadow-black/5 hover:-translate-y-1 outline-none focus-visible:ring-2 focus-visible:ring-accent-primary">
+    <Link
+      href={`/assistants/detail?id=${assistant.assistant_id}`}
+      className="group relative flex flex-col bg-card-bg backdrop-blur-2xl backdrop-saturate-[180%] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-border-color rounded-[16px] p-6 transition-all duration-300 hover:border-border-hover hover:bg-card-hover hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)] hover:-translate-y-1 animate-cascade-item"
+      style={{ animationDelay: `${index * 80}ms` }}
+    >
       {/* Top row: Icon & Status */}
       <div className="flex justify-between items-start mb-4">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-primary/20 to-accent-secondary/20 flex items-center justify-center text-accent-primary border border-accent-primary/10">
+        <div className="w-12 h-12 rounded-[12px] bg-accent-primary/10 backdrop-blur-md flex items-center justify-center text-accent-primary border border-accent-primary/20 shadow-[0_0_20px_rgba(91,106,248,0.15)] transition-all duration-300 group-hover:bg-accent-primary/20 group-hover:scale-105 group-hover:shadow-[0_0_25px_rgba(91,106,248,0.25)]">
           <Bot size={24} />
         </div>
         <div className="flex items-center gap-2">
           {assistant.status === 'enabled' ? (
-            <Badge variant="success" size="sm" className="gap-1.5 px-2.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-success animate-pulse" />
-              Active
-            </Badge>
+            <Badge variant="success">Active</Badge>
           ) : (
-            <Badge variant="outline" size="sm">Disabled</Badge>
+            <Badge variant="outline">Disabled</Badge>
           )}
-          <button 
-            className="text-muted-text hover:text-primary-text transition-colors p-1" 
+          <button
+            className="text-muted-text hover:text-primary-text transition-colors p-1"
             aria-label="More options"
             onClick={(e) => e.preventDefault()}
           >
@@ -238,21 +256,21 @@ function AssistantCard({ assistant }: { assistant: Assistant }) {
 
       {/* Title & Description */}
       <div className="mb-6 flex-1">
-        <h3 className="m-0 text-lg font-bold text-primary-text tracking-tight group-hover:text-accent-primary transition-colors">
+        <h3 className="m-0 text-[18px] font-bold text-primary-text tracking-tight group-hover:text-accent-primary transition-colors">
           {assistant.assistant_name}
         </h3>
-        <p className="m-0 mt-1 text-xs font-mono text-muted-text uppercase tracking-wider">{assistant.type}</p>
-        <p className="m-0 mt-3 text-sm text-secondary-text leading-relaxed line-clamp-2">
+        <p className="m-0 mt-1 text-[11px] font-mono text-accent-primary/80 uppercase tracking-wider">{assistant.type}</p>
+        <p className="m-0 mt-3 text-[13px] text-secondary-text leading-[1.4] line-clamp-2">
           {assistant.description || 'No description provided.'}
         </p>
       </div>
 
       {/* Bottom Stats & Actions */}
       <div className="pt-5 border-t border-border-color flex items-center justify-between">
-        <Button 
-          variant="secondary" 
-          size="sm" 
-          className="gap-2 text-xs h-8 px-3 rounded-lg border-transparent bg-tertiary-bg hover:bg-accent-primary hover:text-white transition-all group-hover:bg-accent-primary group-hover:text-white"
+        <Button
+          variant="secondary"
+          size="sm"
+          className="gap-2 bg-white/20 dark:bg-white/5 backdrop-blur-md border border-white/20 dark:border-white/10 hover:bg-white/30 dark:hover:bg-white/10 transition-all duration-300 group-hover:bg-accent-primary/90 group-hover:text-white group-hover:border-accent-primary"
           onClick={(e) => {
             e.preventDefault();
           }}

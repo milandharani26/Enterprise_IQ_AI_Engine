@@ -19,7 +19,7 @@ export function Header() {
   const currentTheme = resolvedTheme || theme;
 
   return (
-    <header className="h-[64px] px-6 flex items-center justify-end border-b border-border-color bg-primary-bg sticky top-0 z-30 transition-colors duration-300">
+    <header className="h-[64px] px-6 flex items-center justify-end border-b border-border-color bg-primary-bg/50 backdrop-blur-2xl backdrop-saturate-[180%] sticky top-0 z-30 transition-colors duration-300 shadow-[0_4px_24px_rgba(0,0,0,0.02)]">
       <div className="flex items-center gap-4">
         <Button 
           variant="secondary" 

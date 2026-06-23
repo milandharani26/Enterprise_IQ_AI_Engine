@@ -374,8 +374,8 @@ export default function AssistantDetailsClient() {
           <Select
             label="Tool ID"
             options={availableTools?.map((t: any) => ({ label: t.tool_id, value: t.tool_id })) || []}
-            value={newTool.id}
-            onChange={(e) => setNewTool({ ...newTool, id: e.target.value })}
+            value={newTool.tool_id}
+            onChange={(e) => setNewTool({ ...newTool, tool_id: e.target.value })}
           />
           <Select
             label="Credential"
@@ -506,18 +506,7 @@ export default function AssistantDetailsClient() {
                 <span className="text-xs text-secondary-text uppercase tracking-wider font-semibold mb-1">Estimated Tokens</span>
                 <span className="text-xl font-bold text-primary-text">{previewResult.estimated_tokens.toLocaleString()}</span>
               </div>
-              <div className="w-px h-10 bg-border-color"></div>
-              <div className="flex flex-col">
-                <span className="text-xs text-secondary-text uppercase tracking-wider font-semibold mb-1">Status</span>
-                <div className="flex items-center gap-2">
-                  {previewResult.status === 'valid' ? (
-                    <Badge variant="success" size="sm">Valid</Badge>
-                  ) : (
-                    <Badge variant="outline" size="sm" className="text-accent-danger border-accent-danger/20 bg-accent-danger/10">Error</Badge>
-                  )}
-                </div>
-              </div>
-              
+
               {previewResult.warnings && previewResult.warnings.length > 0 && (
                 <>
                   <div className="w-px h-10 bg-border-color"></div>
