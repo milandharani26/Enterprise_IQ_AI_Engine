@@ -78,7 +78,7 @@ class SimpleReactiveType:
         if not workflow:
             workflow = (
                 "\n## WORKFLOW\n"
-                "1. Always call emit_ui_blocks once with your final answer.\n"
+                "1. Format your final answer directly in markdown. Do NOT call the emit_ui_blocks tool if tool is sql_query otherwise call emit_ui_blocks tool once with the final text.\n"
             )
 
         today = datetime.utcnow().strftime("%Y-%m-%d")
