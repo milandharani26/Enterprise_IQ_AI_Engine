@@ -23,6 +23,7 @@ class EmitUIBlocksToolInput(BaseModel):
 
 class EmitUIBlocksTool(BaseTool):
     name = "emit_ui_blocks"
+    return_direct = True
     properties = ToolProperties(
         description=(
             "Final response formatter. REQUIRED on every turn. "

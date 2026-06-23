@@ -82,7 +82,19 @@ class SimpleReactiveType:
             )
 
         today = datetime.utcnow().strftime("%Y-%m-%d")
-        return f"Today's date is {today} (UTC).\n\n{base}{tool_text}{workflow}"
+
+        guardrails = config_dict.get("guardrails", [])
+        guardrails_text = ""
+        if guardrails:
+            guardrails_text = "\n## GUARDRAILS & RESTRICTIONS\nYou must strictly follow these rules:\n"
+            for g in guardrails:
+                if g.get("is_enabled", True) and g.get("instructions"):
+                    enforcement = str(g.get("enforcement", "moderate")).upper()
+                    guardrails_text += (
+                        f"- [{enforcement} PRIORITY]: {g['instructions']}\n"
+                    )
+
+        return f"Today's date is {today} (UTC).\n\n{base}{tool_text}{workflow}{guardrails_text}"
 
     def build_graph(self, config_dict: Dict[str, Any], ctx: ToolContext = None):
         llm_config = config_dict.get("llm_config", {}) or {}

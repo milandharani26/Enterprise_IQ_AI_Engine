@@ -70,6 +70,11 @@ class SchemaCrawlerService:
             from datetime import datetime
             conn_obj.last_synced_at = datetime.utcnow()
             conn_obj.sync_error = None
+            
+            # Invalidate semantic cache for the organization
+            from engine.modules.assistant.semantic_cache import SemanticCacheService
+            await SemanticCacheService.invalidate_workspace_cache(db, org_id)
+            
             await db.commit()
             logger.info(f"Schema sync completed successfully for connection {connection_id}")
 

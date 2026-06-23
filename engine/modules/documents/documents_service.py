@@ -445,12 +445,21 @@ class DocumentService:
         `knowledge.document_chunks.document_id` references `knowledge.documents.id`
         with ON DELETE CASCADE, so chunk rows are removed with the document.
         """
+        # Fetch workspace_id before deleting
+        doc_result = await self.db.execute(select(Document.workspace_id).where(Document.id == document_id))
+        workspace_id = doc_result.scalar_one_or_none()
+        
         result = await self.db.execute(
             delete(Document).where(Document.id == document_id)
         )
         if result.rowcount == 0:
             await self.db.rollback()
             raise DocumentNotFoundError()
+            
+        if workspace_id:
+            from engine.modules.assistant.semantic_cache import SemanticCacheService
+            await SemanticCacheService.invalidate_workspace_cache(self.db, workspace_id)
+            
         await self.db.commit()
 
     # ------------------------------------------------------------------
@@ -476,6 +485,11 @@ class DocumentService:
             doc.processing_completed_at = func.now()
         if error:
             doc.processing_error = error
+            
+        if status == "indexed":
+            from engine.modules.assistant.semantic_cache import SemanticCacheService
+            await SemanticCacheService.invalidate_workspace_cache(self.db, workspace_id)
+            
         await self.db.commit()
         await self.db.refresh(doc)
         return self._to_response(doc)

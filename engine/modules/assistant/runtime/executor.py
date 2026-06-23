@@ -78,6 +78,19 @@ def _extract_response_text(result: dict) -> str:
                         return _fix_markdown_links(block["data"]["content"])
             except (json.JSONDecodeError, TypeError):
                 pass
+                
+    # Also check AIMessage tool_calls in case return_direct stopped execution before ToolMessage was appended
+    for msg in reversed(messages):
+        if not isinstance(msg, AIMessage):
+            continue
+        tool_calls = getattr(msg, "tool_calls", None) or []
+        for call in tool_calls:
+            if call.get("name") == "emit_ui_blocks":
+                args = call.get("args") or {}
+                blocks = args.get("blocks") or []
+                for block in blocks:
+                    if block.get("type") == "markdown" and block.get("data", {}).get("content"):
+                        return _fix_markdown_links(block["data"]["content"])
 
     # 3. FIX: Fallback — read sql_query ToolMessage directly.
     #    This fires when the LLM calls sql_query but fails to follow up with

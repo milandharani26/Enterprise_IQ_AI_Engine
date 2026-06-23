@@ -111,16 +111,45 @@ class ConversationService:
             ]
         elif assistant:
             try:
-                executor = AssistantExecutor()
-                ai_generated_text, content_blocks = await executor.execute(
-                    session_id=str(payload.conversation_id),
-                    conversation_id=str(payload.conversation_id),
-                    user_id=str(payload.user_id),
-                    assistant_id=str(assistant.assistant_id),
-                    query=payload.content,
-                    organization_ids=[str(org_id)],
-                    assistant=assistant,
+                from engine.pipelines.ingestion.services.embedding_service import EmbeddingService
+                from engine.modules.assistant.semantic_cache import SemanticCacheService
+                
+                embed_svc = EmbeddingService()
+                query_embedding = await embed_svc.embed_query(payload.content)
+                
+                cached_match = await SemanticCacheService.lookup_cache(
+                    self.db, 
+                    assistant.assistant_id, 
+                    query_embedding, 
+                    assistant.cache_version
                 )
+                
+                if cached_match:
+                    ai_generated_text = cached_match.response
+                    content_blocks = cached_match.sources or []
+                else:
+                    executor = AssistantExecutor()
+                    ai_generated_text, content_blocks = await executor.execute(
+                        session_id=str(payload.conversation_id),
+                        conversation_id=str(payload.conversation_id),
+                        user_id=str(payload.user_id),
+                        assistant_id=str(assistant.assistant_id),
+                        query=payload.content,
+                        organization_ids=[str(org_id)],
+                        assistant=assistant,
+                    )
+                    
+                    # Cache the result
+                    await SemanticCacheService.write_cache(
+                        self.db,
+                        assistant.assistant_id,
+                        payload.content,
+                        query_embedding,
+                        ai_generated_text,
+                        content_blocks,
+                        None,
+                        assistant.cache_version
+                    )
             except Exception as e:
                 ai_generated_text = (
                     f"I encountered an error while processing your request: {e}"

@@ -55,48 +55,98 @@ class SqlGenerationService:
             return True
 
         import re
+
         question_lower = question.lower()
-        question_clean = re.sub(r'[^a-z0-9\s]', ' ', question_lower)
+        question_clean = re.sub(r"[^a-z0-9\s]", " ", question_lower)
         question_words = set(question_clean.split())
 
         def matches_keyword(word: str, keyword: str) -> bool:
             if word == keyword:
                 return True
-            if word + 's' == keyword or keyword + 's' == word:
+            if word + "s" == keyword or keyword + "s" == word:
                 return True
-            if keyword.endswith('y') and word == keyword[:-1] + 'ies':
+            if keyword.endswith("y") and word == keyword[:-1] + "ies":
                 return True
-            if word.endswith('y') and keyword == word[:-1] + 'ies':
+            if word.endswith("y") and keyword == word[:-1] + "ies":
                 return True
             return False
 
         stopwords = {
-            "do", "not", "give", "any", "information", "about", "table", "database",
-            "show", "disclose", "list", "view", "get", "retrieve", "select", "a",
-            "an", "the", "of", "in", "on", "with", "from", "to", "for", "please",
-            "strict", "block", "rule", "rules", "must", "adhere", "strictly", "should",
-            "only", "never", "cannot", "can", "could", "would", "will", "no", "yes",
-            "details", "detail", "data", "record", "records", "row", "rows", "column",
-            "columns", "field", "fields", "value", "values"
+            "do",
+            "not",
+            "give",
+            "any",
+            "information",
+            "about",
+            "table",
+            "database",
+            "show",
+            "disclose",
+            "list",
+            "view",
+            "get",
+            "retrieve",
+            "select",
+            "a",
+            "an",
+            "the",
+            "of",
+            "in",
+            "on",
+            "with",
+            "from",
+            "to",
+            "for",
+            "please",
+            "strict",
+            "block",
+            "rule",
+            "rules",
+            "must",
+            "adhere",
+            "strictly",
+            "should",
+            "only",
+            "never",
+            "cannot",
+            "can",
+            "could",
+            "would",
+            "will",
+            "no",
+            "yes",
+            "details",
+            "detail",
+            "data",
+            "record",
+            "records",
+            "row",
+            "rows",
+            "column",
+            "columns",
+            "field",
+            "fields",
+            "value",
+            "values",
         }
 
-        lines = guardrails.split('\n')
+        lines = guardrails.split("\n")
         for line in lines:
             line = line.strip()
             if not line:
                 continue
-            
-            clean_line = re.sub(r'^[-*#\s\d\.]+', '', line)
-            clean_line = re.sub(r'^\[.*?\]\s*', '', clean_line)
-            clean_line = re.sub(r'^\(.*?\)\s*:\s*', '', clean_line)
-            clean_line = re.sub(r'^:\s*', '', clean_line)
-            
-            words = re.sub(r'[^a-z0-9\s]', ' ', clean_line.lower()).split()
+
+            clean_line = re.sub(r"^[-*#\s\d\.]+", "", line)
+            clean_line = re.sub(r"^\[.*?\]\s*", "", clean_line)
+            clean_line = re.sub(r"^\(.*?\)\s*:\s*", "", clean_line)
+            clean_line = re.sub(r"^:\s*", "", clean_line)
+
+            words = re.sub(r"[^a-z0-9\s]", " ", clean_line.lower()).split()
             keywords = [w for w in words if w not in stopwords and len(w) > 1]
-            
+
             if not keywords:
                 continue
-                
+
             for kw in keywords:
                 for qw in question_words:
                     if matches_keyword(qw, kw):

@@ -131,6 +131,7 @@ class Settings(BaseSettings):
     enable_async_indexing: bool = Field(default=True, alias="ENABLE_ASYNC_INDEXING", description="Enable background async indexing")
     indexing_task_timeout_seconds: int = Field(default=3600, alias="INDEXING_TASK_TIMEOUT_SECONDS", description="Timeout for indexing job in seconds")
     indexing_task_retries: int = Field(default=3, alias="INDEXING_TASK_RETRIES", description="Number of retries for failed indexing jobs")
+    document_load_timeout_seconds: int = Field(default=300, alias="DOCUMENT_LOAD_TIMEOUT_SECONDS", description="Timeout for loading documents from source (S3/HTTP/etc) in seconds")
 
     # ===== DOCUMENT INGESTION: PGVECTOR =====
     vector_store_type: str = Field(default="postgres", alias="VECTOR_STORE_TYPE", description="Vector store type (only postgres in Phase 1)")

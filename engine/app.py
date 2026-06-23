@@ -26,16 +26,16 @@ def create_app() -> FastAPI:
         description="Core FastAPI engine for my project",
         version="0.1.0",
         debug=(settings.ENV == "local"),
-        swagger_ui_parameters={"persistAuthorization": True}
+        swagger_ui_parameters={"persistAuthorization": True},
     )
 
     # --- CORS (Cross-Origin Resource Sharing) ---
-    _cors_origins = [
-        o.strip()
-        for o in settings.CORS_ORIGINS.split(",")
-        if o.strip()
-    ] if getattr(settings, "CORS_ORIGINS", None) else ["http://localhost:5000", "http://127.0.0.1:5000"]
-    
+    _cors_origins = (
+        [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+        if getattr(settings, "CORS_ORIGINS", None)
+        else ["http://localhost:5000", "http://127.0.0.1:5000"]
+    )
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors_origins if settings.ENV != "local" else [],
@@ -45,48 +45,58 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=[],
     )
-    
+
     # --- Custom Middlewares ---
     # app.add_middleware(AuthMiddleware)
     # app.add_middleware(RequestLoggingMiddleware)
 
     # --- Global Exception Handlers ---
     app.add_exception_handler(AppException, GlobalExceptionHandler.handle_app_exception)
-    app.add_exception_handler(RequestValidationError, GlobalExceptionHandler.handle_validation)
+    app.add_exception_handler(
+        RequestValidationError, GlobalExceptionHandler.handle_validation
+    )
     app.add_exception_handler(HTTPException, GlobalExceptionHandler.handle_http)
     app.add_exception_handler(Exception, GlobalExceptionHandler.handle_unhandled)
 
     # --- API Routes ---
     from engine.routes.v1 import router as api_v1_router
+
     app.include_router(api_v1_router, prefix="/api/v1")
 
     # --- Frontend Static Files (Optional for rendering React/Next.js builds directly from FastAPI) ---
     if _PUBLIC_DIR.exists() and (_PUBLIC_DIR / "_next").exists():
-        app.mount("/_next", StaticFiles(directory=str(_PUBLIC_DIR / "_next")), name="next_assets")
+        app.mount(
+            "/_next",
+            StaticFiles(directory=str(_PUBLIC_DIR / "_next")),
+            name="next_assets",
+        )
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_frontend(full_path: str):
         """Fallback to index.html for frontend routing."""
         if full_path.startswith("api/"):
-            return JSONResponse(status_code=404, content={"success": False, "message": "API Route Not Found"})
+            return JSONResponse(
+                status_code=404,
+                content={"success": False, "message": "API Route Not Found"},
+            )
 
         file_path = _PUBLIC_DIR / full_path
         if file_path.exists() and file_path.is_file():
             return FileResponse(str(file_path))
-            
+
         # Check if it's an HTML page (e.g. /dashboard -> /dashboard.html or /dashboard/index.html)
         html_file_path = _PUBLIC_DIR / f"{full_path}.html"
         if html_file_path.exists() and html_file_path.is_file():
             return FileResponse(str(html_file_path))
-            
+
         html_index_path = _PUBLIC_DIR / full_path / "index.html"
         if html_index_path.exists() and html_index_path.is_file():
             return FileResponse(str(html_index_path))
-        
+
         index_path = _PUBLIC_DIR / "index.html"
         if index_path.exists():
             return FileResponse(str(index_path))
-            
+
         return JSONResponse(status_code=404, content={"message": "Frontend not found"})
 
     # --- Application Lifecycle Events ---
@@ -101,6 +111,7 @@ def create_app() -> FastAPI:
         try:
             import asyncio
             from engine.shared.workers.drive_sync_worker import run_drive_sync_poll
+
             asyncio.create_task(run_drive_sync_poll())
             logger.info("✅ Background workers started")
         except Exception as e:
@@ -109,6 +120,7 @@ def create_app() -> FastAPI:
         # Register document loaders for ingestion pipeline
         try:
             from engine.pipelines.ingestion.loaders import register_all_loaders
+
             register_all_loaders()
             logger.info("✅ Document loaders registered")
         except Exception as e:
@@ -116,16 +128,21 @@ def create_app() -> FastAPI:
 
         # Register assistant runtime types and tools
         try:
-            from engine.modules.assistant.runtime.assistant_factory import AssistantFactory
+            from engine.modules.assistant.runtime.assistant_factory import (
+                AssistantFactory,
+            )
+
             AssistantFactory.register_types()
             from engine.modules.assistant.tools import tool_registry  # noqa: F401
+
             logger.info("✅ Assistant runtime initialized")
         except Exception as e:
             logger.warning(f"Assistant runtime initialization failed: {e}")
-        
+
         # Check pgvector or database connection
         try:
             from sqlalchemy import text
+
             async with AsyncSessionLocal() as session:
                 result = await session.execute(
                     text("SELECT extversion FROM pg_extension WHERE extname = 'vector'")

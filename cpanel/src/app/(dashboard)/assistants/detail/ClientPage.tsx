@@ -344,7 +344,7 @@ export default function AssistantDetailsClient() {
               <Button variant="ghost" size="sm" className="text-xs bg-tertiary-bg" onClick={() => setFormData({ ...formData, system_prompt: "You are a helpful, extremely strictly bound assistant. Follow instructions to the letter." })}>Strict Template</Button>
               <Button variant="ghost" size="sm" className="text-xs bg-tertiary-bg" onClick={() => setFormData({ ...formData, system_prompt: "You are a warm, extremely friendly, and highly empathetic customer support assistant." })}>Friendly Template</Button>
               <div className="w-px h-4 bg-border-color mx-1"></div>
-              <Button variant="secondary" size="sm" className="gap-2 text-xs" onClick={() => toast('Playground coming soon!')}>
+              <Button variant="secondary" size="sm" className="gap-2 text-xs" onClick={() => router.push(`/chat?assistantId=${assistant.assistant_id}`)}>
                 <PlayCircle size={14} />
                 Test in Playground
               </Button>
