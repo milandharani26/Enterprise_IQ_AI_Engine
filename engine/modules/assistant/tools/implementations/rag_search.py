@@ -153,8 +153,8 @@ class RAGSearchTool(BaseTool):
         self._hybrid_text_weight: float = 0.25
         self._hybrid_min_text_score: float = 0.0
 
-        # Phase 1: query expansion toggle (set False to disable LLM expansion call)
-        self._enable_query_expansion: bool = True
+        # Phase 1: query expansion toggle (set False to disable LLM expansion call for lower latency)
+        self._enable_query_expansion: bool = False
 
         logger.info("[RAGSearchTool] Instance created — lazy initialization enabled")
 

@@ -83,6 +83,7 @@ class BaseTool:
             func=run,
             coroutine=arun,
             args_schema=self.properties.input_schema,
+            return_direct=getattr(self, "return_direct", False),
         )
 
         # Fix: remove additionalProperties from schema — unsupported by Claude/Anthropic

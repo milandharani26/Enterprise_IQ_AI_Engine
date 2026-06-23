@@ -72,12 +72,20 @@ async def fetch_indexed_document_inventory(
                     Document.deleted_at.is_(None),
                 )
                 .order_by(Document.title, Document.created_at)
+                .limit(20)
             )
             if org_uuid is not None:
                 query = query.where(Document.workspace_id == org_uuid)
 
             result = await db.execute(query)
             docs = result.scalars().all()
+            
+            # Count total for the message
+            count_query = select(db.scalar(select(Document).where(Document.status == "indexed", Document.deleted_at.is_(None)).with_only_columns(db.func.count())))
+            if org_uuid is not None:
+                count_query = select(db.scalar(select(Document).where(Document.status == "indexed", Document.deleted_at.is_(None), Document.workspace_id == org_uuid).with_only_columns(db.func.count())))
+            
+            # Simple count execution (we use len(docs) if we don't want to run a separate count, but let's just use a simple note)
 
         if not docs:
             if org_uuid is not None:
@@ -87,13 +95,17 @@ async def fetch_indexed_document_inventory(
                 )
             return "No indexed documents in the database yet."
 
-        lines = [f"Total indexed documents: {len(docs)}", ""]
+        lines = [f"Total indexed documents shown (preview): {len(docs)}", ""]
         for index, doc in enumerate(docs, start=1):
             title = doc.title or doc.reference_id or "Untitled"
             chunk_count = doc.chunk_count or 0
             lines.append(
                 f"{index}. **{title}** — {chunk_count} chunks (id: {doc.id})"
             )
+        
+        if len(docs) == 20:
+            lines.append("\n*(Note: Only the first 20 documents are listed here to save context window size. Use the rag_search tool to find information from all documents.)*")
+            
         return "\n".join(lines)
 
     except Exception as exc:
