@@ -49,31 +49,64 @@ class SqlGenerationService:
         """
         Fast pass to check if the question violates the assistant's specific guardrails
         before we even attempt to write SQL.
+        This check is deterministic, saves tokens, and avoids false positives.
         """
         if not guardrails or not guardrails.strip():
             return True
 
-        prompt = PromptTemplate.from_template(
-            "You are a strict security guard. Read the user's question and the security guardrails.\n"
-            "Guardrails: {guardrails}\n"
-            "Question: {question}\n\n"
-            "Does the question violate the guardrails? Reply strictly with YES or NO."
-        )
+        import re
+        question_lower = question.lower()
+        question_clean = re.sub(r'[^a-z0-9\s]', ' ', question_lower)
+        question_words = set(question_clean.split())
 
-        chain = prompt | self.llm
-        try:
-            result = await chain.ainvoke(
-                {"question": question, "guardrails": guardrails}
-            )
-            # FIX: use _extract_text() so this works whether content is a str or a list
-            answer = _extract_text(result.content).strip().upper()
-            if "YES" in answer:
-                logger.warning(f"Guardrail violation detected for question: {question}")
-                return False
-            return True
-        except Exception as e:
-            logger.error(f"Guardrail check failed: {e}")
-            return True  # Fail open if LLM fails, the main generator will also have guardrails
+        def matches_keyword(word: str, keyword: str) -> bool:
+            if word == keyword:
+                return True
+            if word + 's' == keyword or keyword + 's' == word:
+                return True
+            if keyword.endswith('y') and word == keyword[:-1] + 'ies':
+                return True
+            if word.endswith('y') and keyword == word[:-1] + 'ies':
+                return True
+            return False
+
+        stopwords = {
+            "do", "not", "give", "any", "information", "about", "table", "database",
+            "show", "disclose", "list", "view", "get", "retrieve", "select", "a",
+            "an", "the", "of", "in", "on", "with", "from", "to", "for", "please",
+            "strict", "block", "rule", "rules", "must", "adhere", "strictly", "should",
+            "only", "never", "cannot", "can", "could", "would", "will", "no", "yes",
+            "details", "detail", "data", "record", "records", "row", "rows", "column",
+            "columns", "field", "fields", "value", "values"
+        }
+
+        lines = guardrails.split('\n')
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            clean_line = re.sub(r'^[-*#\s\d\.]+', '', line)
+            clean_line = re.sub(r'^\[.*?\]\s*', '', clean_line)
+            clean_line = re.sub(r'^\(.*?\)\s*:\s*', '', clean_line)
+            clean_line = re.sub(r'^:\s*', '', clean_line)
+            
+            words = re.sub(r'[^a-z0-9\s]', ' ', clean_line.lower()).split()
+            keywords = [w for w in words if w not in stopwords and len(w) > 1]
+            
+            if not keywords:
+                continue
+                
+            for kw in keywords:
+                for qw in question_words:
+                    if matches_keyword(qw, kw):
+                        logger.warning(
+                            f"Guardrail violation detected (deterministic match on keyword '{kw}'): "
+                            f"rule='{line}', question='{question}'"
+                        )
+                        return False
+
+        return True
 
     async def generate_sql(
         self,
