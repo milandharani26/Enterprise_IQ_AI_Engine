@@ -71,6 +71,16 @@ export default function AssistantsPage() {
     description: '',
   });
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'enabled' | 'disabled'>('all');
+
+  const filteredAssistants = assistants.filter((ast: Assistant) => {
+    const matchesSearch = ast.assistant_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          ast.type?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = filterStatus === 'all' ? true : ast.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
   const handleCreate = () => {
     createMutation.mutate({
       assistant_name: formData.assistant_name,
@@ -113,6 +123,8 @@ export default function AssistantsPage() {
           <Input
             placeholder="Search assistants by name, code, or tag..."
             icon={<Search size={18} />}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-transparent border-none shadow-none focus:ring-0"
           />
         </div>
@@ -123,9 +135,9 @@ export default function AssistantsPage() {
             Filters
           </Button>
           <div className="flex bg-tertiary-bg p-1 rounded-lg">
-            <button className="px-3 py-1.5 text-xs font-medium bg-card-bg shadow-sm rounded-md text-primary-text transition-all">All</button>
-            <button className="px-3 py-1.5 text-xs font-medium text-secondary-text hover:text-primary-text transition-all">Active</button>
-            <button className="px-3 py-1.5 text-xs font-medium text-secondary-text hover:text-primary-text transition-all">Disabled</button>
+            <button onClick={() => setFilterStatus('all')} className={`px-3 py-1.5 text-xs font-medium transition-all rounded-md ${filterStatus === 'all' ? 'bg-card-bg shadow-sm text-primary-text' : 'text-secondary-text hover:text-primary-text'}`}>All</button>
+            <button onClick={() => setFilterStatus('enabled')} className={`px-3 py-1.5 text-xs font-medium transition-all rounded-md ${filterStatus === 'enabled' ? 'bg-card-bg shadow-sm text-primary-text' : 'text-secondary-text hover:text-primary-text'}`}>Active</button>
+            <button onClick={() => setFilterStatus('disabled')} className={`px-3 py-1.5 text-xs font-medium transition-all rounded-md ${filterStatus === 'disabled' ? 'bg-card-bg shadow-sm text-primary-text' : 'text-secondary-text hover:text-primary-text'}`}>Disabled</button>
           </div>
         </div>
       </div>
@@ -135,8 +147,8 @@ export default function AssistantsPage() {
         <div className="flex items-center justify-center p-10">Loading assistants...</div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
-          {assistants.length > 0 ? assistants.map((assistant, idx) => (
-            <AssistantCard key={assistant.id || idx} assistant={assistant} />
+          {filteredAssistants.length > 0 ? filteredAssistants.map((assistant: Assistant, idx: number) => (
+            <AssistantCard key={assistant.assistant_id || idx} assistant={assistant} />
           )) : (
             <div className="col-span-full text-center text-muted-text p-10">
               No assistants found. Create one!
