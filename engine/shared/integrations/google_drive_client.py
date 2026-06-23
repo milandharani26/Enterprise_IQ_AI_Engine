@@ -78,6 +78,7 @@ class GoogleDriveClient:
             # If no query provided, exclude unsupported Google Apps types by default
             if query is None:
                 query = (
+                    "trashed = false and "
                     "mimeType != 'application/vnd.google-apps.folder' and "
                     "mimeType != 'application/vnd.google-apps.shortcut' and "
                     "mimeType != 'application/vnd.google-apps.form' and "
@@ -117,7 +118,7 @@ class GoogleDriveClient:
                 request = self.service.files().export_media(fileId=file_id, mimeType=export_mime_type)
             else:
                 # It's a binary file (PDF, image, etc.)
-                request = self.service.files().get_media(fileId=file_id)
+                request = self.service.files().get_media(fileId=file_id, acknowledgeAbuse=True)
 
             fh = io.BytesIO()
             downloader = MediaIoBaseDownload(fh, request)

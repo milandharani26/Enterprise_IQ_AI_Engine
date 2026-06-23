@@ -17,12 +17,13 @@ const PROVIDERS = ['Google', 'PostgreSQL', 'MySQL'];
 
 export default function CredentialsPage() {
   const { activeOrganizationId } = useAppStore();
-  const { useCredentialsQuery, useAddCredentialMutation, useDeleteCredentialMutation, useTestCredentialMutation } = useCredentialsHooks();
+  const { useCredentialsQuery, useAddCredentialMutation, useDeleteCredentialMutation, useTestCredentialMutation, useGenerateGoogleOAuthUrlMutation } = useCredentialsHooks();
   const { data: credentials = [], isLoading } = useCredentialsQuery(activeOrganizationId);
 
   const addCredentialMutation = useAddCredentialMutation();
   const deleteCredentialMutation = useDeleteCredentialMutation();
   const testCredentialMutation = useTestCredentialMutation();
+  const generateGoogleOAuthUrlMutation = useGenerateGoogleOAuthUrlMutation();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,6 +34,13 @@ export default function CredentialsPage() {
 
   // Auth Data State
   const [authData, setAuthData] = useState<Record<string, any>>({});
+  
+  // Google OAuth State
+  const [googleClientId, setGoogleClientId] = useState('');
+  const [googleClientSecret, setGoogleClientSecret] = useState('');
+  const [googleRedirectUri, setGoogleRedirectUri] = useState(
+    typeof window !== 'undefined' ? `${window.location.origin}/google` : ''
+  );
 
   // Database State
   const [dbHost, setDbHost] = useState('');
@@ -49,7 +57,20 @@ export default function CredentialsPage() {
 
   const handleCreate = async () => {
     if (name && provider && activeOrganizationId) {
-      if (provider === 'PostgreSQL' || provider === 'MySQL') {
+      if (provider === 'Google') {
+        generateGoogleOAuthUrlMutation.mutate({
+          name,
+          organization_id: activeOrganizationId,
+          client_id: googleClientId,
+          client_secret: googleClientSecret,
+          redirect_uri: googleRedirectUri
+        }, {
+          onSuccess: (data) => {
+            window.location.href = data.auth_url;
+          }
+        });
+        return; // Don't reset state or close modal, we're redirecting
+      } else if (provider === 'PostgreSQL' || provider === 'MySQL') {
         addCredentialMutation.mutate({
           organization_id: activeOrganizationId,
           name,
@@ -289,23 +310,38 @@ export default function CredentialsPage() {
                   </div>
 
                   {provider === 'Google' && (
-                    <>
+                    <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">JSON Key file contents OR Raw JSON Tokens</label>
-                        <textarea
-                          placeholder="{...}"
-                          rows={6}
-                          onChange={(e) => {
-                            try {
-                              updateAuthData('json_content', JSON.parse(e.target.value));
-                            } catch {
-                              updateAuthData('raw', e.target.value);
-                            }
-                          }}
-                          className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow font-mono"
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Client ID *</label>
+                        <input
+                          type="text"
+                          placeholder="Google OAuth client ID."
+                          value={googleClientId}
+                          onChange={(e) => setGoogleClientId(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
                         />
                       </div>
-                    </>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Client Secret *</label>
+                        <input
+                          type="password"
+                          placeholder="Google OAuth client secret."
+                          value={googleClientSecret}
+                          onChange={(e) => setGoogleClientSecret(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Redirect URI *</label>
+                        <input
+                          type="text"
+                          value={googleRedirectUri}
+                          onChange={(e) => setGoogleRedirectUri(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Configured redirect URI for OAuth callback.</p>
+                      </div>
+                    </div>
                   )}
 
                   {(provider === 'PostgreSQL' || provider === 'MySQL') && (
@@ -368,10 +404,10 @@ export default function CredentialsPage() {
                   </button>
                   <button
                     onClick={handleCreate}
-                    disabled={!name || !provider}
+                    disabled={!name || !provider || (provider === 'Google' && generateGoogleOAuthUrlMutation.isPending)}
                     className="px-4 py-2 text-sm rounded-lg font-medium bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors shadow-sm disabled:opacity-50"
                   >
-                    Create Credential
+                    {provider === 'Google' && generateGoogleOAuthUrlMutation.isPending ? 'Redirecting...' : 'Create Credential'}
                   </button>
                 </div>
               </div>

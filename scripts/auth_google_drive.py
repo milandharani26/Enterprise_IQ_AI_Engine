@@ -45,7 +45,7 @@ def main():
 
     print("Initiating Google Drive authentication flow...")
     flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-    creds = flow.run_local_server(port=5000)
+    creds = flow.run_local_server(port=5000, prompt='consent')
 
     # Save the credentials for the next run
     with open('token.json', 'w') as token:

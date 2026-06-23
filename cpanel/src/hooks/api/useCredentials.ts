@@ -81,10 +81,40 @@ export const useCredentialsHooks = () => {
     });
   };
 
+  const useGenerateGoogleOAuthUrlMutation = () => {
+    return useMutation({
+      mutationFn: async (payload: { name: string; organization_id: string; client_id: string; client_secret: string; redirect_uri: string }) => {
+        const { data } = await axios.post(`${API_URL}/credentials/oauth/google/generate-url`, payload);
+        return data as { auth_url: string; state: string };
+      },
+      onError: (error: any) => {
+        toast.error(error?.response?.data?.detail || 'Failed to generate OAuth URL');
+      },
+    });
+  };
+
+  const useExchangeGoogleOAuthCodeMutation = () => {
+    return useMutation({
+      mutationFn: async (payload: { code: string; state: string }) => {
+        const { data } = await axios.post(`${API_URL}/credentials/oauth/google/exchange`, payload);
+        return data as Credential;
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['credentials'] });
+        toast.success('Google Drive connected successfully!');
+      },
+      onError: (error: any) => {
+        toast.error(error?.response?.data?.detail || 'Failed to connect Google Drive');
+      },
+    });
+  };
+
   return {
     useCredentialsQuery,
     useAddCredentialMutation,
     useDeleteCredentialMutation,
     useTestCredentialMutation,
+    useGenerateGoogleOAuthUrlMutation,
+    useExchangeGoogleOAuthCodeMutation,
   };
 };

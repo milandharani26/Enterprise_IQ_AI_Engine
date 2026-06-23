@@ -40,3 +40,21 @@ class CredentialTestRequest(BaseModel):
 class CredentialTestResponse(BaseModel):
     success: bool
     message: Optional[str] = None
+
+
+class OAuthGenerateUrlRequest(BaseModel):
+    name: str
+    organization_id: UUID
+    client_id: str
+    client_secret: str
+    redirect_uri: str
+
+
+class OAuthGenerateUrlResponse(BaseModel):
+    auth_url: str
+    state: str
+
+
+class OAuthExchangeRequest(BaseModel):
+    code: str
+    state: str
