@@ -33,6 +33,7 @@ async def process_chat_message(
     Receives prompt text from your frontend, logs it as a USER message,
     runs the AI core, logs the ASSISTANT response, and returns the AI reply.
     """
+    print(f"Received chat payload: {payload.dict()}")
     # 1. Extract organization_id from the Service Token if present
     if auth and auth.credentials:
         try:
