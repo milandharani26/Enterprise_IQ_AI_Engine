@@ -60,7 +60,7 @@ const MOCK_ASSISTANTS = [
 export default function AssistantsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { useAssistantsQuery, useCreateAssistantMutation } = useAssistantsHooks();
-  
+
   const { data: assistants = [], isLoading } = useAssistantsQuery();
   const createMutation = useCreateAssistantMutation();
 
@@ -69,6 +69,16 @@ export default function AssistantsPage() {
     assistant_name: '',
     type: 'simple_reactive',
     description: '',
+  });
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'enabled' | 'disabled'>('all');
+
+  const filteredAssistants = assistants.filter((ast: Assistant) => {
+    const matchesSearch = ast.assistant_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ast.type?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = filterStatus === 'all' ? true : ast.status === filterStatus;
+    return matchesSearch && matchesStatus;
   });
 
   const handleCreate = () => {
@@ -113,6 +123,8 @@ export default function AssistantsPage() {
           <Input
             placeholder="Search assistants by name, code, or tag..."
             icon={<Search size={18} />}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-transparent border-none shadow-none focus:ring-0"
           />
         </div>
@@ -123,9 +135,9 @@ export default function AssistantsPage() {
             Filters
           </Button>
           <div className="flex bg-tertiary-bg p-1 rounded-lg">
-            <button className="px-3 py-1.5 text-xs font-medium bg-card-bg shadow-sm rounded-md text-primary-text transition-all">All</button>
-            <button className="px-3 py-1.5 text-xs font-medium text-secondary-text hover:text-primary-text transition-all">Active</button>
-            <button className="px-3 py-1.5 text-xs font-medium text-secondary-text hover:text-primary-text transition-all">Disabled</button>
+            <button onClick={() => setFilterStatus('all')} className={`px-3 py-1.5 text-xs font-medium transition-all rounded-md ${filterStatus === 'all' ? 'bg-card-bg shadow-sm text-primary-text' : 'text-secondary-text hover:text-primary-text'}`}>All</button>
+            <button onClick={() => setFilterStatus('enabled')} className={`px-3 py-1.5 text-xs font-medium transition-all rounded-md ${filterStatus === 'enabled' ? 'bg-card-bg shadow-sm text-primary-text' : 'text-secondary-text hover:text-primary-text'}`}>Active</button>
+            <button onClick={() => setFilterStatus('disabled')} className={`px-3 py-1.5 text-xs font-medium transition-all rounded-md ${filterStatus === 'disabled' ? 'bg-card-bg shadow-sm text-primary-text' : 'text-secondary-text hover:text-primary-text'}`}>Disabled</button>
           </div>
         </div>
       </div>
@@ -153,8 +165,8 @@ export default function AssistantsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
-          {assistants.length > 0 ? assistants.map((assistant, idx) => (
-            <AssistantCard key={assistant.assistant_id || idx} assistant={assistant} index={idx} />
+          {filteredAssistants.length > 0 ? filteredAssistants.map((assistant: Assistant, idx: number) => (
+            <AssistantCard key={assistant.assistant_id || idx} assistant={assistant} />
           )) : (
             <div className="col-span-full text-center text-muted-text p-10 text-[13px]">
               No assistants found. Create one!
@@ -172,9 +184,9 @@ export default function AssistantsPage() {
         maxWidth="max-w-[480px]"
       >
         <form className="flex flex-col gap-4">
-          <Input 
-            label="Assistant Name" 
-            placeholder="e.g. Customer Support" 
+          <Input
+            label="Assistant Name"
+            placeholder="e.g. Customer Support"
             value={formData.assistant_name}
             onChange={(e) => setFormData({ ...formData, assistant_name: e.target.value })}
             autoFocus
@@ -197,9 +209,9 @@ export default function AssistantsPage() {
             <Button variant="ghost" type="button" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
-            <Button 
-              variant="primary" 
-              type="button" 
+            <Button
+              variant="primary"
+              type="button"
               onClick={handleCreate}
               disabled={createMutation.isPending || !formData.assistant_name || !formData.type}
             >
@@ -216,8 +228,8 @@ import Link from 'next/link';
 
 function AssistantCard({ assistant, index }: { assistant: Assistant; index: number }) {
   return (
-    <Link 
-      href={`/assistants/detail?id=${assistant.assistant_id}`} 
+    <Link
+      href={`/assistants/detail?id=${assistant.assistant_id}`}
       className="group relative flex flex-col bg-card-bg backdrop-blur-2xl backdrop-saturate-[180%] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-border-color rounded-[16px] p-6 transition-all duration-300 hover:border-border-hover hover:bg-card-hover hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)] hover:-translate-y-1 animate-cascade-item"
       style={{ animationDelay: `${index * 80}ms` }}
     >
@@ -232,8 +244,8 @@ function AssistantCard({ assistant, index }: { assistant: Assistant; index: numb
           ) : (
             <Badge variant="outline">Disabled</Badge>
           )}
-          <button 
-            className="text-muted-text hover:text-primary-text transition-colors p-1" 
+          <button
+            className="text-muted-text hover:text-primary-text transition-colors p-1"
             aria-label="More options"
             onClick={(e) => e.preventDefault()}
           >
@@ -255,9 +267,9 @@ function AssistantCard({ assistant, index }: { assistant: Assistant; index: numb
 
       {/* Bottom Stats & Actions */}
       <div className="pt-5 border-t border-border-color flex items-center justify-between">
-        <Button 
-          variant="secondary" 
-          size="sm" 
+        <Button
+          variant="secondary"
+          size="sm"
           className="gap-2 bg-white/20 dark:bg-white/5 backdrop-blur-md border border-white/20 dark:border-white/10 hover:bg-white/30 dark:hover:bg-white/10 transition-all duration-300 group-hover:bg-accent-primary/90 group-hover:text-white group-hover:border-accent-primary"
           onClick={(e) => {
             e.preventDefault();

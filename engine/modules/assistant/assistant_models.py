@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, CheckConstraint
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, CheckConstraint, Integer
+from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 from sqlalchemy.sql import func
+from pgvector.sqlalchemy import Vector
 import uuid
 
 from engine.shared.db.base_class import Base
@@ -20,6 +21,7 @@ class Assistant(Base):
     guardrails = Column(JSONB(astext_type=Text()), nullable=True)
     tools = Column(JSONB(astext_type=Text()), nullable=True)
     prompt_library = Column(Boolean, default=False, nullable=True)
+    cache_version = Column(Integer, default=1, nullable=False)
     
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
@@ -31,3 +33,19 @@ class Assistant(Base):
     __table_args__ = (
         CheckConstraint("status IN ('enabled', 'disabled')", name='check_assistant_status'),
     )
+
+class AssistantQueryCache(Base):
+    __tablename__ = "assistant_query_cache"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    assistant_id = Column(UUID(as_uuid=True), ForeignKey('assistant.assistant_id', ondelete='CASCADE'), nullable=False)
+    query = Column(Text, nullable=False)
+    query_embedding = Column(Vector(1536), nullable=False)
+    response = Column(Text, nullable=False)
+    sources = Column(JSONB(astext_type=Text()), nullable=True)
+    source_chunk_ids = Column(ARRAY(UUID(as_uuid=True)), nullable=True)
+    cache_version = Column(Integer, nullable=False)
+    
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+

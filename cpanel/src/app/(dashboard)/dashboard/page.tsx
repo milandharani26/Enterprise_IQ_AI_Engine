@@ -67,7 +67,6 @@ export default function Dashboard() {
                 <Bot className="w-4 h-4 text-gray-400" />
                 Deployed Assistants
               </h2>
-              <button className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">View All</button>
             </div>
             
             <div className="flex-1 p-0">
@@ -113,7 +112,6 @@ export default function Dashboard() {
                 <Activity className="w-4 h-4 text-gray-400" />
                 Recent Credentials
               </h2>
-              <button className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">Manage</button>
             </div>
             
             <div className="flex-1 p-0">

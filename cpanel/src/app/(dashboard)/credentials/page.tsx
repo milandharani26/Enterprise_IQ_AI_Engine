@@ -50,10 +50,14 @@ export default function CredentialsPage() {
   const [dbName, setDbName] = useState('');
   const [dbSchema, setDbSchema] = useState('');
 
-  const filteredCredentials = (credentials || []).filter((c: Credential) =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.provider.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const [filterType, setFilterType] = useState('all');
+
+  const filteredCredentials = (credentials || []).filter((c: Credential) => {
+    const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          c.provider.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = filterType === 'all' ? true : c.provider === filterType;
+    return matchesSearch && matchesType;
+  });
 
   const handleCreate = async () => {
     if (name && provider && activeOrganizationId) {
@@ -170,7 +174,10 @@ export default function CredentialsPage() {
                 />
               </div>
               <div className="w-full md:w-48 relative">
-                <select className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white appearance-none focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow">
+                <select 
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white appearance-none focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow">
                   <option value="all">All Types</option>
                   {PROVIDERS.map(p => (
                     <option key={p} value={p}>{p}</option>

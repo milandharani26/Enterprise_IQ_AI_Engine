@@ -12,9 +12,11 @@ from sqlalchemy import (
     CheckConstraint,
     UniqueConstraint,
     Text,
+    FetchedValue,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from pgvector.sqlalchemy import Vector
+from sqlalchemy.dialects.postgresql import UUID, JSONB, TSVECTOR
 
 from engine.shared.db.base_class import Base
 
@@ -92,6 +94,7 @@ class DocumentChunk(Base):
     embedding_model = Column(String(255), nullable=True)
     embedding_created_at = Column(DateTime, nullable=True)
     embedding_metadata = Column(JSONB, nullable=True)
+    text_search_vector = Column(TSVECTOR, nullable=True, server_default=FetchedValue())
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(
         DateTime,

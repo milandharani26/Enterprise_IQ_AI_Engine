@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { Send, Bot, User, Sparkles, Trash2, ChevronDown, FileText } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { useConversationHooks } from '@/hooks/api/useConversation';
 import { useAssistantsHooks, Assistant } from '@/hooks/api/useAssistants';
 import { useDocumentsHooks } from '@/hooks/api/useDocuments';
@@ -20,10 +21,16 @@ function renderAssistantContent(content: string, metadata?: { content_blocks?: a
     return blocks
       .map((block: any) => {
         if (block.type === 'markdown' && block.data?.content) return block.data.content;
-        if (block.type === 'table' && block.data) {
-          const cols = block.data.columns || [];
-          const rows = block.data.rows || [];
-          return [cols.join(' | '), ...rows.map((r: any[]) => r.join(' | '))].join('\n');
+        if (block.type === 'table') {
+          const tableData = block.data || block;
+          const cols = tableData.columns || [];
+          const rows = tableData.rows || [];
+          if (cols.length === 0 && rows.length === 0) return '';
+          return [
+            `| ${cols.join(' | ')} |`,
+            `| ${cols.map(() => '---').join(' | ')} |`,
+            ...rows.map((r: any[]) => `| ${r.map(val => String(val ?? '').replace(/\|/g, '\\|')).join(' | ')} |`)
+          ].join('\n');
         }
         return JSON.stringify(block.data || block);
       })
@@ -60,6 +67,8 @@ export default function ChatPage() {
   const { user, activeOrganizationId, hasHydrated } = useAppStore();
   const { useSendChatMessageMutation } = useConversationHooks();
   const { useAssistantsQuery } = useAssistantsHooks();
+  const searchParams = useSearchParams();
+  const assistantIdParam = searchParams?.get('assistantId');
   const { useDocumentsQuery } = useDocumentsHooks();
   const { data: assistants = [], isLoading: assistantsLoading } = useAssistantsQuery();
   const { data: documentsResponse } = useDocumentsQuery(activeOrganizationId, {
@@ -87,13 +96,23 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<any[]>([]);
 
   useEffect(() => {
-    if (enabledAssistants.length && !selectedAssistant) {
+    if (!enabledAssistants.length) return;
+
+    if (assistantIdParam) {
+      const fromParam = enabledAssistants.find((a: Assistant) => a.assistant_id === assistantIdParam);
+      if (fromParam && selectedAssistant?.assistant_id !== assistantIdParam) {
+        setSelectedAssistant(fromParam);
+        return;
+      }
+    }
+
+    if (!selectedAssistant && !assistantIdParam) {
       const withRag = enabledAssistants.find((a: Assistant) =>
         a.tools?.some((t: any) => t.tool_id === 'rag_search')
       );
       setSelectedAssistant(withRag || enabledAssistants[0]);
     }
-  }, [enabledAssistants, selectedAssistant]);
+  }, [enabledAssistants, selectedAssistant?.assistant_id, assistantIdParam]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -200,7 +219,7 @@ export default function ChatPage() {
           <div className="flex items-center gap-2 pl-2">
             <Sparkles className="w-4 h-4 text-blue-500" />
             <span className="font-semibold text-sm text-gray-800 dark:text-gray-200 tracking-tight">
-              Document Chat
+              {selectedAssistant?.assistant_name || 'Document Chat'}
             </span>
             {hasRag && indexedDocCount > 0 && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
@@ -238,9 +257,6 @@ export default function ChatPage() {
                       }`}
                     >
                       <div className="font-medium">{ast.assistant_name}</div>
-                      {ast.tools?.some((t: any) => t.tool_id === 'rag_search') && (
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400">RAG enabled</span>
-                      )}
                     </button>
                   ))}
                 </div>
@@ -277,13 +293,7 @@ export default function ChatPage() {
             This assistant does not have <code>rag_search</code> — add it in Assistants → Detail → Tools.
           </p>
         )}
-        <Link
-          href="/documents"
-          className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-        >
-          <FileText className="w-3.5 h-3.5" />
-          Upload documents for RAG
-        </Link>
+
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 md:p-8">
@@ -296,10 +306,10 @@ export default function ChatPage() {
                 </div>
               </div>
               <h2 className="text-3xl font-semibold mb-3 text-gray-900 dark:text-white text-center tracking-tight">
-                Chat with your documents
+                Chat with your assistant
               </h2>
               <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md text-center text-sm">
-                Ask questions about your indexed files. The assistant uses <code className="text-xs bg-gray-100 dark:bg-white/10 px-1 rounded">rag_search</code> to find relevant chunks in pgvector, then answers with citations.
+                Start a conversation with your selected assistant to get help, answer questions, or accomplish tasks.
               </p>
               {hasRag && indexedDocCount > 0 && (
                 <div className="flex flex-wrap justify-center gap-2 max-w-lg">

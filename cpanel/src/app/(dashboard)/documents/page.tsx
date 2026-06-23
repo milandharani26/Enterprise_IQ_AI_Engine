@@ -19,6 +19,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { useDocumentsHooks, DocumentRecord } from '@/hooks/api/useDocuments';
 import { useDriveDocumentsHooks, DriveDocumentRecord } from '@/hooks/api/useDriveDocuments';
 import { HardDrive } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 
 const ACCEPTED_TYPES = '.pdf,.doc,.docx,.txt,.md,.csv,.xlsx,.xls,.pptx,.ppt,.html,.json';
 
@@ -53,6 +54,9 @@ export default function DocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploadingFile, setUploadingFile] = useState<string | null>(null);
+
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [docToDelete, setDocToDelete] = useState<DocumentRecord | null>(null);
 
   const documents = listResponse?.data || [];
   const driveDocuments = driveListResponse?.data || [];
@@ -102,12 +106,18 @@ export default function DocumentsPage() {
     onFilesSelected(e.dataTransfer.files);
   };
 
-  const handleDelete = async (doc: DocumentRecord) => {
-    if (!activeOrganizationId) return;
-    if (!confirm(`Delete "${doc.title || doc.reference_id}"?`)) return;
+  const handleDeleteClick = (doc: DocumentRecord) => {
+    setDocToDelete(doc);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!activeOrganizationId || !docToDelete) return;
     try {
-      await deleteMutation.mutateAsync({ documentId: doc.id, organizationId: activeOrganizationId });
+      await deleteMutation.mutateAsync({ documentId: docToDelete.id, organizationId: activeOrganizationId });
       toast.success('Document deleted');
+      setIsDeleteModalOpen(false);
+      setDocToDelete(null);
     } catch {
       toast.error('Failed to delete document');
     }
@@ -150,23 +160,21 @@ export default function DocumentsPage() {
         )}
 
         <div className="flex items-center gap-2 mt-4 mb-6">
-          <button 
+          <button
             onClick={() => setActiveTab('local')}
-            className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all duration-300 ${
-              activeTab === 'local' 
-                ? 'bg-black dark:bg-white text-white dark:text-gray-900 shadow-xl shadow-black/10 dark:shadow-white/10 scale-105' 
+            className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all duration-300 ${activeTab === 'local'
+                ? 'bg-black dark:bg-white text-white dark:text-gray-900 shadow-xl shadow-black/10 dark:shadow-white/10 scale-105'
                 : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10'
-            }`}
+              }`}
           >
             Local Files
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('drive')}
-            className={`px-6 py-2.5 rounded-full font-medium text-sm flex items-center gap-2 transition-all duration-300 ${
-              activeTab === 'drive' 
-                ? 'bg-[#4285F4] text-white shadow-xl shadow-blue-500/20 scale-105' 
+            className={`px-6 py-2.5 rounded-full font-medium text-sm flex items-center gap-2 transition-all duration-300 ${activeTab === 'drive'
+                ? 'bg-[#4285F4] text-white shadow-xl shadow-blue-500/20 scale-105'
                 : 'bg-[#4285F4]/10 text-[#4285F4] hover:bg-[#4285F4]/20'
-            }`}
+              }`}
           >
             <HardDrive className="w-4 h-4" /> Google Drive
           </button>
@@ -176,107 +184,106 @@ export default function DocumentsPage() {
           <>
             {/* Upload zone */}
             <div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={`relative cursor-pointer rounded-2xl border-2 border-dashed p-12 text-center transition-all ${
-            dragOver
-              ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-500/10'
-              : 'border-gray-300 dark:border-white/20 hover:border-blue-400 dark:hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-white/5'
-          }`}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            accept={ACCEPTED_TYPES}
-            multiple
-            onChange={(e) => onFilesSelected(e.target.files)}
-          />
-          <div className="flex flex-col items-center gap-4">
-            {uploadMutation.isPending ? (
-              <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-            ) : (
-              <CloudUpload className="w-12 h-12 text-gray-400 dark:text-gray-500" />
-            )}
-            <div>
-              <p className="text-lg font-medium text-gray-900 dark:text-white">
-                {uploadMutation.isPending
-                  ? `Uploading ${uploadingFile}…`
-                  : 'Drop files here or click to upload'}
-              </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                PDF, Word, Excel, PowerPoint, CSV, TXT, HTML, JSON — max 50 MB
-              </p>
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`relative cursor-pointer rounded-2xl border-2 border-dashed p-12 text-center transition-all ${dragOver
+                ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-500/10'
+                : 'border-gray-300 dark:border-white/20 hover:border-blue-400 dark:hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-white/5'
+                }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept={ACCEPTED_TYPES}
+                multiple
+                onChange={(e) => onFilesSelected(e.target.files)}
+              />
+              <div className="flex flex-col items-center gap-4">
+                {uploadMutation.isPending ? (
+                  <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+                ) : (
+                  <CloudUpload className="w-12 h-12 text-gray-400 dark:text-gray-500" />
+                )}
+                <div>
+                  <p className="text-lg font-medium text-gray-900 dark:text-white">
+                    {uploadMutation.isPending
+                      ? `Uploading ${uploadingFile}…`
+                      : 'Drop files here or click to upload'}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    PDF, Word, Excel, PowerPoint, CSV, TXT, HTML, JSON — max 50 MB
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Document list */}
-        <div className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <FileText className="w-4 h-4 text-gray-400" />
-              Uploaded Documents
-            </h2>
-            <span className="text-xs text-gray-500">{documents.length} total</span>
-          </div>
+            {/* Document list */}
+            <div className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-gray-400" />
+                  Uploaded Documents
+                </h2>
+                <span className="text-xs text-gray-500">{documents.length} total</span>
+              </div>
 
-          {isLoading ? (
-            <div className="p-12 flex justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-            </div>
-          ) : documents.length === 0 ? (
-            <div className="p-12 text-center text-gray-500 dark:text-gray-400 text-sm">
-              No documents yet. Upload a file above to get started.
-            </div>
-          ) : (
-            <ul className="divide-y divide-gray-100 dark:divide-white/5">
-              {documents.map((doc) => (
-                <li
-                  key={doc.id}
-                  className="flex items-center justify-between gap-4 px-5 py-4 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0">
-                      {doc.status === 'indexed' ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                      ) : doc.status === 'failed' ? (
-                        <AlertCircle className="w-5 h-5 text-red-500" />
-                      ) : (
-                        <Upload className="w-5 h-5 text-blue-500" />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900 dark:text-white truncate">
-                        {doc.title || doc.reference_id}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {doc.chunk_count} chunks · {new Date(doc.created_at).toLocaleString()}
-                        {doc.processing_error && (
-                          <span className="text-red-500 ml-2">{doc.processing_error}</span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {statusBadge(doc.status)}
-                    <button
-                      onClick={() => handleDelete(doc)}
-                      disabled={deleteMutation.isPending}
-                      className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-                      title="Delete"
+              {isLoading ? (
+                <div className="p-12 flex justify-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                </div>
+              ) : documents.length === 0 ? (
+                <div className="p-12 text-center text-gray-500 dark:text-gray-400 text-sm">
+                  No documents yet. Upload a file above to get started.
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-100 dark:divide-white/5">
+                  {documents.map((doc) => (
+                    <li
+                      key={doc.id}
+                      className="flex items-center justify-between gap-4 px-5 py-4 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        </>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0">
+                          {doc.status === 'indexed' ? (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                          ) : doc.status === 'failed' ? (
+                            <AlertCircle className="w-5 h-5 text-red-500" />
+                          ) : (
+                            <Upload className="w-5 h-5 text-blue-500" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 dark:text-white truncate">
+                            {doc.title || doc.reference_id}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {doc.chunk_count} chunks · {new Date(doc.created_at).toLocaleString()}
+                            {doc.processing_error && (
+                              <span className="text-red-500 ml-2">{doc.processing_error}</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {statusBadge(doc.status)}
+                        <button
+                          onClick={() => handleDeleteClick(doc)}
+                          disabled={deleteMutation.isPending}
+                          className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </>
         ) : (
           <div className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="p-5 border-b border-gray-100 dark:border-white/5 flex items-center justify-between bg-blue-50/30 dark:bg-blue-500/5">
@@ -325,9 +332,9 @@ export default function DocumentsPage() {
                         )}
                       </div>
                       <div className="min-w-0">
-                        <a 
-                          href={doc.web_view_link} 
-                          target="_blank" 
+                        <a
+                          href={doc.web_view_link}
+                          target="_blank"
                           rel="noreferrer"
                           className="font-medium text-[#4285F4] hover:underline truncate block"
                         >
@@ -356,6 +363,21 @@ export default function DocumentsPage() {
           </div>
         )}
       </div>
+
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Delete Document"
+        description={`Are you sure you want to delete "${docToDelete?.title || docToDelete?.reference_id || 'this document'}"? This action cannot be undone.`}
+        maxWidth="max-w-md"
+      >
+        <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-border-color">
+          <Button variant="ghost" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+          <Button variant="primary" className="bg-accent-danger hover:bg-accent-danger/90 text-white border-transparent" onClick={confirmDelete} disabled={deleteMutation.isPending}>
+            {deleteMutation.isPending ? 'Deleting...' : 'Yes, Delete Document'}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
