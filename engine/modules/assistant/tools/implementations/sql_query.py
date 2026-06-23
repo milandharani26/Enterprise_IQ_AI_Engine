@@ -84,6 +84,25 @@ class SqlQueryTool(BaseTool):
             logger.error("Organization ID missing from context")
             return "Error: Organization ID not found in context."
 
+        # Deterministic check for write/modify query attempts to avoid token usage
+        question_clean = question.strip().lower()
+        is_write_attempt = False
+        if (
+            (question_clean.startswith("insert ") and "into" in question_clean)
+            or (question_clean.startswith("update ") and "set" in question_clean)
+            or (question_clean.startswith("delete ") and "from" in question_clean)
+            or question_clean.startswith("drop table")
+            or question_clean.startswith("truncate ")
+            or "insert into" in question_clean
+            or "delete from" in question_clean
+            or "update table" in question_clean
+        ):
+            is_write_attempt = True
+
+        if is_write_attempt:
+            logger.warning(f"Rejected write/modify query attempt: {question}")
+            return "This assistant is read-only. Database modification queries (INSERT, UPDATE, DELETE, DROP) are not allowed."
+
         org_id = UUID(str(org_id_str))
         user_id = UUID(str(ctx.user_id)) if ctx and ctx.user_id else None
 
@@ -170,7 +189,7 @@ class SqlQueryTool(BaseTool):
                     q_vec,
                     org_id,
                     [selected_db_id],
-                    top_k=5,
+                    top_k=3,
                 )
 
                 retrieved_tables = table_names
@@ -184,6 +203,7 @@ class SqlQueryTool(BaseTool):
                     org_id,
                     [selected_db_id],
                     table_names,
+                    question=question,
                 )
 
                 logger.info(
