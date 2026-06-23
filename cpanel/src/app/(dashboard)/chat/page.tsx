@@ -20,10 +20,16 @@ function renderAssistantContent(content: string, metadata?: { content_blocks?: a
     return blocks
       .map((block: any) => {
         if (block.type === 'markdown' && block.data?.content) return block.data.content;
-        if (block.type === 'table' && block.data) {
-          const cols = block.data.columns || [];
-          const rows = block.data.rows || [];
-          return [cols.join(' | '), ...rows.map((r: any[]) => r.join(' | '))].join('\n');
+        if (block.type === 'table') {
+          const tableData = block.data || block;
+          const cols = tableData.columns || [];
+          const rows = tableData.rows || [];
+          if (cols.length === 0 && rows.length === 0) return '';
+          return [
+            `| ${cols.join(' | ')} |`,
+            `| ${cols.map(() => '---').join(' | ')} |`,
+            ...rows.map((r: any[]) => `| ${r.map(val => String(val ?? '').replace(/\|/g, '\\|')).join(' | ')} |`)
+          ].join('\n');
         }
         return JSON.stringify(block.data || block);
       })
