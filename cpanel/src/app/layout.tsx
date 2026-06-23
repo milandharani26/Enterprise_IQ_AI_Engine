@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { Toaster } from "react-hot-toast";
+import NextTopLoader from 'nextjs-toploader';
 import "../styles/globals.css";
 
-const plusJakartaSans = Plus_Jakarta_Sans({
-  variable: "--font-plus-jakarta",
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
 });
 
@@ -22,7 +28,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${plusJakartaSans.variable} antialiased`}>
+      <body className={`${inter.variable} ${jetbrainsMono.variable} antialiased leading-[1.4]`}>
+        <NextTopLoader color="#5B6AF8" height={2} showSpinner={false} />
         <QueryProvider>
           <ThemeProvider>
             {children}

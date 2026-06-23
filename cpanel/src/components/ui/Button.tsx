@@ -15,19 +15,19 @@ export function Button({
   ...props 
 }: ButtonProps) {
   
-  const baseClasses = "inline-flex items-center justify-center font-medium rounded-md transition-all duration-150 outline-none disabled:opacity-50 disabled:cursor-not-allowed";
+  const baseClasses = "inline-flex items-center justify-center font-medium rounded-[10px] transition-all duration-300 outline-none disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-md";
   
   const variantClasses = {
-    primary: "bg-accent-primary text-white hover:bg-accent-primary-hover hover:shadow-[0_0_15px_rgba(59,130,246,0.3)]",
-    secondary: "bg-card-bg text-primary-text border border-border-color hover:bg-card-hover hover:border-border-hover",
-    danger: "bg-accent-danger text-white hover:brightness-110",
-    ghost: "bg-transparent text-secondary-text hover:bg-card-bg hover:text-primary-text"
+    primary: "bg-accent-primary/80 text-white border border-white/20 shadow-[0_0_15px_rgba(91,106,248,0.4)] hover:bg-accent-primary hover:shadow-[0_0_20px_rgba(91,106,248,0.6)] hover:-translate-y-0.5",
+    secondary: "bg-white/20 dark:bg-white/5 text-primary-text border border-white/30 dark:border-white/10 hover:bg-white/30 dark:hover:bg-white/10 hover:shadow-[0_4px_15px_rgba(0,0,0,0.05)]",
+    danger: "bg-accent-danger/80 text-white border border-white/20 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:bg-accent-danger hover:-translate-y-0.5",
+    ghost: "bg-transparent text-secondary-text hover:bg-white/20 dark:hover:bg-white/10 hover:text-primary-text"
   };
 
   const sizeClasses = {
-    sm: "px-3 py-1.5 text-sm",
-    md: "px-4 py-2 text-sm",
-    lg: "px-6 py-3 text-base"
+    sm: "h-7 px-3 text-[13px]",
+    md: "h-8 px-4 text-[13px]",
+    lg: "h-10 px-6 text-sm"
   };
 
   const widthClass = fullWidth ? "w-full" : "";
