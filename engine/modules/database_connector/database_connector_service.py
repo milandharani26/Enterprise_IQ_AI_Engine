@@ -30,27 +30,15 @@ class DatabaseConnectionService:
         if not db_obj:
             raise HTTPException(status_code=404, detail="Database connection not found")
 
-        # Fetch tables
+        from sqlalchemy.orm import selectinload
+
+        # Fetch tables with columns in a single query (eliminates N+1)
         stmt = select(SchemaTable).where(
             SchemaTable.connector_id == connection_id,
             SchemaTable.organization_id == org_id
-        )
+        ).options(selectinload(SchemaTable.columns))
         result = await db.execute(stmt)
         tables = result.scalars().all()
-
-        if not tables:
-            return []
-
-        table_ids = [t.id for t in tables]
-
-        # Fetch columns for all these tables
-        stmt_cols = select(SchemaColumn).where(SchemaColumn.table_id.in_(table_ids))
-        result_cols = await db.execute(stmt_cols)
-        columns = result_cols.scalars().all()
-
-        col_map = {}
-        for c in columns:
-            col_map.setdefault(c.table_id, []).append(c)
 
         response = []
         for t in tables:
@@ -67,7 +55,7 @@ class DatabaseConnectionService:
                         "is_primary_key": c.is_primary_key,
                         "column_description": c.column_description,
                     }
-                    for c in col_map.get(t.id, [])
+                    for c in t.columns
                 ]
             })
 

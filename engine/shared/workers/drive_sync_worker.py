@@ -18,6 +18,9 @@ async def _sync_drive_for_workspace(session, connector: Connector, credential: C
         if not credential.auth_data:
             return
             
+        connector.sync_status = "syncing"
+        await session.commit()
+            
         client = GoogleDriveClient(auth_data=credential.auth_data)
         
         # We look for files modified in the last 10 minutes to cover our polling interval
@@ -35,6 +38,10 @@ async def _sync_drive_for_workspace(session, connector: Connector, credential: C
 
         files = client.list_files(query=query)
         if not files:
+            connector.sync_status = "synced"
+            from sqlalchemy import func
+            connector.last_synced_at = func.now()
+            await session.commit()
             return
 
         logger.info(f"Drive Sync: Found {len(files)} updated files for workspace {connector.organization_id}")
@@ -43,8 +50,15 @@ async def _sync_drive_for_workspace(session, connector: Connector, credential: C
         for file in files:
             await ingest_drive_file(file, connector.organization_id, client, service)
             
+        connector.sync_status = "synced"
+        from sqlalchemy import func
+        connector.last_synced_at = func.now()
+        await session.commit()
+            
     except Exception as e:
         logger.error(f"Drive Sync failed for workspace {connector.organization_id}: {e}")
+        connector.sync_status = "failed"
+        await session.commit()
 
 async def run_drive_sync_poll():
     """Background task that polls Google Drive for changes every 5 minutes."""

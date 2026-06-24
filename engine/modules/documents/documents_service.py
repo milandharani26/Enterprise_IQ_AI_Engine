@@ -206,9 +206,12 @@ class DocumentService:
         suffix = Path(filename).suffix or mimetypes.guess_extension(detected_mime) or ""
         tmp_path = None
         try:
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-                tmp.write(file_bytes)
-                tmp_path = tmp.name
+            import asyncio
+            def _write_temp(suffix, data):
+                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                    tmp.write(data)
+                    return tmp.name
+            tmp_path = await asyncio.to_thread(_write_temp, suffix, file_bytes)
             content, metadata = await loader.load_from_url(Path(tmp_path).as_uri())
             merged = dict(metadata or {})
             merged["source_filename"] = filename
@@ -358,6 +361,7 @@ class DocumentService:
         Return a page of documents and the total count.
 
         sort: field name, prefix with '-' for descending (e.g. '-created_at').
+        Optimized: uses window function to get total count in the same query as data.
         """
         filters = [
             Document.workspace_id == workspace_id,
@@ -368,23 +372,25 @@ class DocumentService:
         if source:
             filters.append(Document.source == source)
 
-        total: int = (
-            await self.db.execute(
-                select(func.count(Document.id)).where(and_(*filters))
-            )
-        ).scalar() or 0
-
         order_col = _resolve_sort(sort)
 
-        rows = (
-            await self.db.execute(
-                select(Document)
-                .where(and_(*filters))
-                .order_by(order_col)
-                .limit(limit)
-                .offset(offset)
-            )
-        ).scalars().all()
+        # Single query with window function for total count
+        count_col = func.count(Document.id).over().label("_total")
+        stmt = (
+            select(Document, count_col)
+            .where(and_(*filters))
+            .order_by(order_col)
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.db.execute(stmt)
+        raw_rows = result.all()
+
+        if not raw_rows:
+            return [], 0
+
+        total = raw_rows[0]._total
+        rows = [row[0] for row in raw_rows]
 
         return [self._to_response(d) for d in rows], total
 
@@ -580,7 +586,8 @@ class DocumentService:
         upload_dir = Path(settings.document_upload_dir) / str(workspace_id) / str(reference_id)
         upload_dir.mkdir(parents=True, exist_ok=True)
         file_path = upload_dir / safe_name
-        file_path.write_bytes(file_bytes)
+        import asyncio
+        await asyncio.to_thread(file_path.write_bytes, file_bytes)
         source_url = file_path.resolve().as_uri()
 
         merged_metadata = dict(metadata or {})

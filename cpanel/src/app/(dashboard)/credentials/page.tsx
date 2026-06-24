@@ -9,7 +9,8 @@ import {
   X,
   ChevronDown,
   ShieldCheck,
-  Globe
+  Globe,
+  RefreshCw
 } from 'lucide-react';
 import { useCredentialsHooks, Credential } from '@/hooks/api/useCredentials';
 import { useAppStore } from '@/store/useAppStore';
@@ -17,16 +18,20 @@ const PROVIDERS = ['Google', 'PostgreSQL', 'MySQL'];
 
 export default function CredentialsPage() {
   const { activeOrganizationId } = useAppStore();
-  const { useCredentialsQuery, useAddCredentialMutation, useDeleteCredentialMutation, useTestCredentialMutation, useGenerateGoogleOAuthUrlMutation } = useCredentialsHooks();
+  const { useCredentialsQuery, useAddCredentialMutation, useDeleteCredentialMutation, useTestCredentialMutation, useGenerateGoogleOAuthUrlMutation, useRegenerateGoogleOAuthUrlMutation } = useCredentialsHooks();
   const { data: credentials = [], isLoading } = useCredentialsQuery(activeOrganizationId);
 
   const addCredentialMutation = useAddCredentialMutation();
   const deleteCredentialMutation = useDeleteCredentialMutation();
   const testCredentialMutation = useTestCredentialMutation();
   const generateGoogleOAuthUrlMutation = useGenerateGoogleOAuthUrlMutation();
+  const regenerateGoogleOAuthUrlMutation = useRegenerateGoogleOAuthUrlMutation();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Delete Modal State
+  const [credentialToDelete, setCredentialToDelete] = useState<string | null>(null);
 
   // Modal State
   const [provider, setProvider] = useState('');
@@ -236,9 +241,26 @@ export default function CredentialsPage() {
                           <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">
                             {cred.last_used_at ? new Date(cred.last_used_at).toLocaleDateString() : 'Never'}
                           </td>
-                          <td className="px-5 py-3.5 text-right">
+                          <td className="px-5 py-3.5 text-right space-x-2">
+                            {cred.status === 'pending' && cred.provider === 'Google' && (
+                              <button
+                                onClick={() => {
+                                  regenerateGoogleOAuthUrlMutation.mutate(cred.id, {
+                                    onSuccess: (data) => {
+                                      window.location.href = data.auth_url;
+                                    }
+                                  });
+                                }}
+                                disabled={regenerateGoogleOAuthUrlMutation.isPending}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors disabled:opacity-50 border border-blue-200 dark:border-blue-500/20 mr-2"
+                                title="Complete Setup"
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${regenerateGoogleOAuthUrlMutation.isPending ? 'animate-spin' : ''}`} />
+                                {regenerateGoogleOAuthUrlMutation.isPending ? 'Redirecting...' : 'Complete Setup'}
+                              </button>
+                            )}
                             <button
-                              onClick={() => deleteCredentialMutation.mutate(cred.id)}
+                              onClick={() => setCredentialToDelete(cred.id)}
                               className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                               title="Delete Credential"
                             >
@@ -421,6 +443,50 @@ export default function CredentialsPage() {
             </div>
           </div>
         )}
+      {/* Delete Credential Modal */}
+      {credentialToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-in fade-in">
+          <div
+            className="absolute inset-0 bg-black/20 dark:bg-black/60 backdrop-blur-sm"
+            onClick={() => setCredentialToDelete(null)}
+          />
+          <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-[#0f172a] shadow-xl border border-black/10 dark:border-white/10 overflow-hidden animate-in zoom-in-95 duration-300 slide-in-from-bottom-8">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Delete Credential</h2>
+                <button
+                  onClick={() => setCredentialToDelete(null)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-gray-500 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                Are you sure you want to delete this credential? This action cannot be undone, and any connectors currently using it will be disabled.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setCredentialToDelete(null)}
+                  className="px-4 py-2 rounded-lg font-medium text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    deleteCredentialMutation.mutate(credentialToDelete, {
+                      onSuccess: () => setCredentialToDelete(null)
+                    });
+                  }}
+                  disabled={deleteCredentialMutation.isPending}
+                  className="px-4 py-2 rounded-lg font-medium bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50"
+                >
+                  {deleteCredentialMutation.isPending ? 'Deleting...' : 'Yes, Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
