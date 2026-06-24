@@ -12,7 +12,10 @@ from engine.modules.assistant.tools.base_tool import (
     ToolProperties,
     ToolCategory,
 )
-from engine.modules.assistant.tools.exceptions import ToolExecutionError
+from engine.modules.assistant.tools.exceptions import (
+    ToolExecutionError,
+    SecurityGuardrailError,
+)
 from engine.shared.db.session import AsyncSessionLocal
 
 from engine.modules.database_connector.retrieval_service import DatabaseRetrievalService
@@ -123,7 +126,9 @@ class SqlQueryTool(BaseTool):
 
         if not passed:
             logger.warning("Query blocked by guardrails")
-            return "Query blocked by security guardrails. You do not have permission to ask this question."
+            raise SecurityGuardrailError(
+                "I am sorry, but I cannot provide that information."
+            )
 
         start_time = time.time()
 
@@ -229,7 +234,9 @@ class SqlQueryTool(BaseTool):
                         "This query was blocked by the assistant's security guardrails."
                     )
                     logger.warning(error_msg)
-                    return error_msg
+                    raise SecurityGuardrailError(
+                        "I am sorry, but I cannot provide that information"
+                    )
 
                 logger.info("STEP 7 - Validating SQL")
                 print(f"DEBUG POINT: query validator called for sql: {generated_sql}")
@@ -274,6 +281,9 @@ class SqlQueryTool(BaseTool):
 
                 return response_str
 
+            except SecurityGuardrailError:
+                success = False
+                raise
             except Exception as e:
                 import traceback
 

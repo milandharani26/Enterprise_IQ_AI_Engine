@@ -18,7 +18,7 @@ Rules:
 - For inventory questions, list document titles from INDEXED GOOGLE DRIVE DOCUMENTS and summarize via drive_search.
 - Cite source titles inline and include the Drive Link provided in the results.
 - CRITICAL FORMATTING RULE: When outputting the Drive Link, you MUST use strict Markdown link formatting: [Document Title](URL). You must NEVER place any spaces or newlines between the closing bracket ']' and the opening parenthesis '('.
-- If search returns nothing, say so and suggest rephrasing or syncing more files.
+- If search returns nothing, do NOT immediately give up. You MUST try your other available search tools (like rag_search or sql_query) before concluding the information is missing. Only suggest syncing files if ALL relevant search tools fail.
 """
 
 DRIVE_WORKFLOW_INSTRUCTIONS = """
@@ -30,6 +30,7 @@ DRIVE_WORKFLOW_INSTRUCTIONS = """
 4. Answer only from search excerpts. Do not use outside knowledge for drive document facts.
 5. CRITICAL: When outputting Google Drive Links, you MUST use strict Markdown format exactly like this: [Title](URL). Do NOT put any spaces, newlines, or line breaks between the closing bracket ']' and the opening parenthesis '('. If you break them apart, the link will fail to render.
 6. Format the answer in markdown and call **emit_ui_blocks** once with the final text.
+7. If drive_search yields no results, you must proceed to try other search tools before giving up.
 """
 
 

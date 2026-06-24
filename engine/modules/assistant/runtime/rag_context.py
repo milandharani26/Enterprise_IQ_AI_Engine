@@ -19,7 +19,7 @@ Rules:
 - Do not invent content — only use search results and the indexed document list below.
 - For inventory questions, list document titles from INDEXED DOCUMENTS and summarize via rag_search.
 - Cite source titles inline (e.g. *Source: filename.pdf*).
-- If search returns nothing, say so and suggest rephrasing or uploading files on the Documents page.
+- If search returns nothing, do NOT immediately give up. You MUST try your other available search tools (like drive_search or sql_query) before concluding the information is missing. Only suggest uploading files if ALL relevant search tools fail.
 """
 
 RAG_WORKFLOW_INSTRUCTIONS = """
@@ -30,6 +30,7 @@ RAG_WORKFLOW_INSTRUCTIONS = """
 3. For "what documents do you have": list titles from INDEXED DOCUMENTS, then rag_search for summaries.
 4. Answer only from search excerpts. Do not use outside knowledge for document facts.
 5. Format the answer in markdown and call **emit_ui_blocks** once with the final text.
+6. If rag_search yields no results, you must proceed to try other search tools before giving up.
 """
 
 

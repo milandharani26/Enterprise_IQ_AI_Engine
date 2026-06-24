@@ -19,3 +19,8 @@ class LLMInitializationError(Exception):
         super().__init__(message)
         self.original_error = original_error
         self.context = context or {}
+
+
+class SecurityGuardrailError(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)

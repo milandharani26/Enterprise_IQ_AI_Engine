@@ -26,6 +26,7 @@ from engine.modules.assistant.runtime.sql_context import (
     enrich_config_for_sql,
 )
 from engine.modules.assistant.tools.base_tool import ToolContext
+from engine.modules.assistant.tools.exceptions import SecurityGuardrailError
 
 logger = logging.getLogger(__name__)
 
@@ -245,6 +246,10 @@ class AssistantExecutor:
                 query,
                 session_id,
             )
+        except SecurityGuardrailError as e:
+            logger.warning("Agent execution short-circuited due to security guardrail.")
+            static_msg = str(e)
+            return static_msg, [{"type": "markdown", "data": {"content": static_msg}}]
         except Exception as e:
             logger.exception("AGENT INVOCATION FAILED")
             raise
