@@ -29,14 +29,16 @@ DRIVE_WORKFLOW_INSTRUCTIONS = """
 3. For "what drive documents do you have": list titles from INDEXED GOOGLE DRIVE DOCUMENTS, then drive_search for summaries.
 4. Answer only from search excerpts. Do not use outside knowledge for drive document facts.
 5. CRITICAL: When outputting Google Drive Links, you MUST use strict Markdown format exactly like this: [Title](URL). Do NOT put any spaces, newlines, or line breaks between the closing bracket ']' and the opening parenthesis '('. If you break them apart, the link will fail to render.
-6. Format the answer in markdown and call **emit_ui_blocks** once with the final text.
+6. Format the answer directly in markdown.
 7. If drive_search yields no results, you must proceed to try other search tools before giving up.
 """
 
 
 def assistant_has_drive_tool(config_dict: Dict[str, Any]) -> bool:
     tools = config_dict.get("tools") or []
-    return any(isinstance(t, dict) and t.get("tool_id") == "drive_search" for t in tools)
+    return any(
+        isinstance(t, dict) and t.get("tool_id") == "drive_search" for t in tools
+    )
 
 
 def _to_uuid(value: Union[UUID, str, None]) -> Optional[UUID]:
@@ -68,9 +70,7 @@ async def fetch_drive_document_inventory(
         async with AsyncSessionLocal() as db:
             query = (
                 select(DriveDocument)
-                .where(
-                    DriveDocument.status == "indexed"
-                )
+                .where(DriveDocument.status == "indexed")
                 .order_by(DriveDocument.title, DriveDocument.created_at)
                 .limit(20)
             )
@@ -88,18 +88,21 @@ async def fetch_drive_document_inventory(
                 )
             return "No indexed Google Drive documents in the database yet."
 
-        lines = [f"Total indexed Google Drive documents shown (preview): {len(docs)}", ""]
+        lines = [
+            f"Total indexed Google Drive documents shown (preview): {len(docs)}",
+            "",
+        ]
         for index, doc in enumerate(docs, start=1):
             title = doc.title or "Untitled"
             chunk_count = doc.chunk_count or 0
             link = doc.web_view_link or "No Link"
-            lines.append(
-                f"{index}. **{title}** — {chunk_count} chunks (link: {link})"
-            )
-            
+            lines.append(f"{index}. **{title}** — {chunk_count} chunks (link: {link})")
+
         if len(docs) == 20:
-            lines.append("\n*(Note: Only the first 20 drive documents are listed here to save context window size. Use the drive_search tool to find information from all documents.)*")
-            
+            lines.append(
+                "\n*(Note: Only the first 20 drive documents are listed here to save context window size. Use the drive_search tool to find information from all documents.)*"
+            )
+
         return "\n".join(lines)
 
     except Exception as exc:
@@ -107,17 +110,22 @@ async def fetch_drive_document_inventory(
         return "Could not load indexed Google Drive document list."
 
 
-def enrich_config_for_drive(config_dict: Dict[str, Any], inventory: str) -> Dict[str, Any]:
+def enrich_config_for_drive(
+    config_dict: Dict[str, Any], inventory: str
+) -> Dict[str, Any]:
     """Append the live Google Drive document inventory to the assistant system instruction."""
     cfg = dict(config_dict)
     instruction = (cfg.get("system_instruction") or "").strip()
 
-    if "Answer questions about Google Drive documents using drive_search" not in instruction:
-        instruction = f"{DRIVE_DOCUMENT_ASSISTANT_PROMPT.strip()}\n\n{instruction}".strip()
+    if (
+        "Answer questions about Google Drive documents using drive_search"
+        not in instruction
+    ):
+        instruction = (
+            f"{DRIVE_DOCUMENT_ASSISTANT_PROMPT.strip()}\n\n{instruction}".strip()
+        )
 
     cfg["system_instruction"] = (
-        f"{instruction}\n\n"
-        f"## INDEXED GOOGLE DRIVE DOCUMENTS\n"
-        f"{inventory}"
+        f"{instruction}\n\n## INDEXED GOOGLE DRIVE DOCUMENTS\n{inventory}"
     )
     return cfg

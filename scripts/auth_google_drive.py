@@ -61,34 +61,11 @@ def main():
         print("\nStarting OAuth flow...")
 
         flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
+        creds = flow.run_local_server(port=5000, prompt='consent')
 
-        print("Waiting for Google authorization...")
-
-        print("BEFORE OAuth")
-
-        creds = flow.run_local_server(
-            host="localhost",
-            port=5000,
-            open_browser=True,
-            success_message=("Authentication successful. You may close this window."),
-        )
-
-        print("AFTER OAuth")
-
-        print("\nOAuth completed successfully!")
-
-        if not creds:
-            raise Exception("Credentials object is empty")
-
-        print(f"Access Token Exists  : {bool(creds.token)}")
-        print(f"Refresh Token Exists : {bool(creds.refresh_token)}")
-
-        token_path = Path(__file__).resolve().parent / "token.json"
-
-        print(f"\nWriting token file:")
-        print(token_path)
-
-        with open(token_path, "w") as token:
+        # Save the credentials for the next run
+        token_path = Path('token.json')
+        with open(token_path, 'w') as token:
             token.write(creds.to_json())
 
         if not token_path.exists():
@@ -97,7 +74,7 @@ def main():
         print("\n" + "=" * 80)
         print("SUCCESS")
         print("=" * 80)
-        print(f"token.json generated at:\n{token_path}")
+        print(f"token.json generated at:\n{token_path.absolute()}")
 
         print("\nToken Content Preview:")
         print("-" * 40)
@@ -114,7 +91,6 @@ def main():
         print("=" * 80)
         print(str(e))
         raise
-
 
 if __name__ == "__main__":
     main()

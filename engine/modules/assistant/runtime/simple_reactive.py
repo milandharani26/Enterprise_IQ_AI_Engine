@@ -40,9 +40,7 @@ class SimpleReactiveType:
                             or "",
                         )
                     )
-        for tool_id in ("emit_ui_blocks",):
-            if not any(tool.name == tool_id for tool in tools):
-                tools.append(ToolRegistryNew.get_tool(tool_id)())
+
         return tools
 
     def get_system_instruction(
@@ -78,7 +76,7 @@ class SimpleReactiveType:
         if not workflow:
             workflow = (
                 "\n## WORKFLOW\n"
-                "1. Format your final answer directly in markdown. Do NOT call the emit_ui_blocks tool if tool is sql_query otherwise call emit_ui_blocks tool once with the final text.\n"
+                "1. Format your final answer directly in markdown.\n"
             )
 
         today = datetime.utcnow().strftime("%Y-%m-%d")

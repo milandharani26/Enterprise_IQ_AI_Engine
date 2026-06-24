@@ -29,7 +29,7 @@ RAG_WORKFLOW_INSTRUCTIONS = """
 2. Use the user's question as the search query (rephrase if needed for clarity).
 3. For "what documents do you have": list titles from INDEXED DOCUMENTS, then rag_search for summaries.
 4. Answer only from search excerpts. Do not use outside knowledge for document facts.
-5. Format the answer in markdown and call **emit_ui_blocks** once with the final text.
+5. Format the answer directly in markdown.
 6. If rag_search yields no results, you must proceed to try other search tools before giving up.
 """
 
@@ -80,12 +80,28 @@ async def fetch_indexed_document_inventory(
 
             result = await db.execute(query)
             docs = result.scalars().all()
-            
+
             # Count total for the message
-            count_query = select(db.scalar(select(Document).where(Document.status == "indexed", Document.deleted_at.is_(None)).with_only_columns(db.func.count())))
+            count_query = select(
+                db.scalar(
+                    select(Document)
+                    .where(Document.status == "indexed", Document.deleted_at.is_(None))
+                    .with_only_columns(db.func.count())
+                )
+            )
             if org_uuid is not None:
-                count_query = select(db.scalar(select(Document).where(Document.status == "indexed", Document.deleted_at.is_(None), Document.workspace_id == org_uuid).with_only_columns(db.func.count())))
-            
+                count_query = select(
+                    db.scalar(
+                        select(Document)
+                        .where(
+                            Document.status == "indexed",
+                            Document.deleted_at.is_(None),
+                            Document.workspace_id == org_uuid,
+                        )
+                        .with_only_columns(db.func.count())
+                    )
+                )
+
             # Simple count execution (we use len(docs) if we don't want to run a separate count, but let's just use a simple note)
 
         if not docs:
@@ -100,13 +116,13 @@ async def fetch_indexed_document_inventory(
         for index, doc in enumerate(docs, start=1):
             title = doc.title or doc.reference_id or "Untitled"
             chunk_count = doc.chunk_count or 0
-            lines.append(
-                f"{index}. **{title}** — {chunk_count} chunks (id: {doc.id})"
-            )
-        
+            lines.append(f"{index}. **{title}** — {chunk_count} chunks (id: {doc.id})")
+
         if len(docs) == 20:
-            lines.append("\n*(Note: Only the first 20 documents are listed here to save context window size. Use the rag_search tool to find information from all documents.)*")
-            
+            lines.append(
+                "\n*(Note: Only the first 20 documents are listed here to save context window size. Use the rag_search tool to find information from all documents.)*"
+            )
+
         return "\n".join(lines)
 
     except Exception as exc:
@@ -114,17 +130,17 @@ async def fetch_indexed_document_inventory(
         return "Could not load indexed document list."
 
 
-def enrich_config_for_rag(config_dict: Dict[str, Any], inventory: str) -> Dict[str, Any]:
+def enrich_config_for_rag(
+    config_dict: Dict[str, Any], inventory: str
+) -> Dict[str, Any]:
     """Append the live document inventory to the assistant system instruction."""
     cfg = dict(config_dict)
     instruction = (cfg.get("system_instruction") or "").strip()
 
     if "Answer document questions using rag_search" not in instruction:
-        instruction = f"{RAG_DOCUMENT_ASSISTANT_PROMPT.strip()}\n\n{instruction}".strip()
+        instruction = (
+            f"{RAG_DOCUMENT_ASSISTANT_PROMPT.strip()}\n\n{instruction}".strip()
+        )
 
-    cfg["system_instruction"] = (
-        f"{instruction}\n\n"
-        f"## INDEXED DOCUMENTS\n"
-        f"{inventory}"
-    )
+    cfg["system_instruction"] = f"{instruction}\n\n## INDEXED DOCUMENTS\n{inventory}"
     return cfg

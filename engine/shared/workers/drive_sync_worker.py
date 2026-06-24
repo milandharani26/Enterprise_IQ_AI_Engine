@@ -9,6 +9,7 @@ from engine.shared.models.connector_model import Connector
 from engine.shared.models.credential_model import Credential
 from engine.shared.integrations.google_drive_client import GoogleDriveClient
 from engine.modules.drive_documents.drive_documents_service import DriveDocumentService
+from engine.pipelines.ingestion.sync_drive import ingest_drive_file
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +22,8 @@ async def _sync_drive_for_workspace(session, connector: Connector, credential: C
         
         # We look for files modified in the last 10 minutes to cover our polling interval
         # In a robust system, we would track the last_sync_time per workspace.
-        time_threshold = (datetime.now(timezone.utc) - timedelta(minutes=10)).strftime('%Y-%m-%dT%H:%M:%S')
-        query = f"modifiedTime > '{time_threshold}' and mimeType != 'application/vnd.google-apps.folder'"
+        # For testing, remove the 10-minute threshold so we get all files
+        query = "mimeType != 'application/vnd.google-apps.folder'"
         
         # Add standard filter to exclude unsupported
         query += (
@@ -39,28 +40,8 @@ async def _sync_drive_for_workspace(session, connector: Connector, credential: C
         logger.info(f"Drive Sync: Found {len(files)} updated files for workspace {connector.organization_id}")
         
         service = DriveDocumentService(session)
-        from engine.shared.schemas.drive_document_schema import DriveDocumentIngestRequest
-        
         for file in files:
-            req = DriveDocumentIngestRequest(
-                drive_file_id=file.get("id"),
-                title=file.get("name"),
-                web_view_link=file.get("webViewLink"),
-                web_content_link=file.get("webContentLink"),
-                mime_type=file.get("mimeType"),
-                file_size_bytes=int(file.get("size", 0)),
-                last_modified_in_drive=file.get("modifiedTime")
-            )
-            # Add owners if present
-            owners = file.get("owners", [])
-            if owners:
-                req.owner_email = owners[0].get("emailAddress")
-                
-            parents = file.get("parents", [])
-            if parents:
-                req.drive_folder_id = parents[0]
-
-            await service.create_drive_document(req, connector.organization_id)
+            await ingest_drive_file(file, connector.organization_id, client, service)
             
     except Exception as e:
         logger.error(f"Drive Sync failed for workspace {connector.organization_id}: {e}")

@@ -41,6 +41,27 @@ def _fix_markdown_links(text: str) -> str:
     return re.sub(r"\]\s+\(\s*(https?://)", r"](\1", text)
 
 
+def _normalize_blocks(blocks: list) -> list:
+    """Fix LLM hallucinations in UI blocks (e.g. {'text': '...'} -> {'data': {'content': '...'}})"""
+    if not isinstance(blocks, list):
+        return []
+    normalized = []
+    for b in blocks:
+        if not isinstance(b, dict):
+            continue
+        if b.get("type") == "markdown":
+            if "data" not in b:
+                text_val = b.pop("text", None) or b.pop("content", None)
+                if text_val is not None:
+                    b["data"] = {"content": text_val}
+            elif "content" not in b.get("data", {}):
+                text_val = b.pop("text", None)
+                if text_val is not None:
+                    b["data"]["content"] = text_val
+        normalized.append(b)
+    return normalized
+
+
 def _extract_response_text(result: dict) -> str:
     messages = result.get("messages") or []
     if not messages:
@@ -61,7 +82,18 @@ def _extract_response_text(result: dict) -> str:
             text = "\n".join(p for p in parts if p).strip()
         else:
             text = str(content or "").strip()
+            
         if text:
+            if text.strip().startswith("{"):
+                try:
+                    parsed = json.loads(text)
+                    if isinstance(parsed, dict) and parsed.get("blocks"):
+                        blocks = _normalize_blocks(parsed.get("blocks") or [])
+                        for block in blocks:
+                            if block.get("type") == "markdown" and block.get("data", {}).get("content"):
+                                return _fix_markdown_links(block["data"]["content"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
             return _fix_markdown_links(text)
 
     # 2. emit_ui_blocks ToolMessage — extract markdown block text.
@@ -72,10 +104,9 @@ def _extract_response_text(result: dict) -> str:
         ):
             try:
                 parsed = json.loads(msg.content or "")
-                for block in parsed.get("blocks") or []:
-                    if block.get("type") == "markdown" and block.get("data", {}).get(
-                        "content"
-                    ):
+                blocks = _normalize_blocks(parsed.get("blocks") or [])
+                for block in blocks:
+                    if block.get("type") == "markdown" and block.get("data", {}).get("content"):
                         return _fix_markdown_links(block["data"]["content"])
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -88,14 +119,12 @@ def _extract_response_text(result: dict) -> str:
         for call in tool_calls:
             if call.get("name") == "emit_ui_blocks":
                 args = call.get("args") or {}
-                blocks = args.get("blocks") or []
+                blocks = _normalize_blocks(args.get("blocks") or [])
                 for block in blocks:
                     if block.get("type") == "markdown" and block.get("data", {}).get("content"):
                         return _fix_markdown_links(block["data"]["content"])
 
     # 3. FIX: Fallback — read sql_query ToolMessage directly.
-    #    This fires when the LLM calls sql_query but fails to follow up with
-    #    emit_ui_blocks or a non-empty AIMessage, causing "No response generated".
     for msg in reversed(messages):
         if isinstance(msg, ToolMessage) and getattr(msg, "name", "") == "sql_query":
             content = str(getattr(msg, "content", "") or "").strip()
@@ -128,15 +157,11 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
         ):
             try:
                 parsed = json.loads(msg.content or "")
-                blocks = parsed.get("blocks")
+                blocks = _normalize_blocks(parsed.get("blocks") or [])
                 if blocks:
                     for b in blocks:
-                        if b.get("type") == "markdown" and "content" in b.get(
-                            "data", {}
-                        ):
-                            b["data"]["content"] = _fix_markdown_links(
-                                b["data"]["content"]
-                            )
+                        if b.get("type") == "markdown" and "content" in b.get("data", {}):
+                            b["data"]["content"] = _fix_markdown_links(b["data"]["content"])
                     return blocks
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -149,15 +174,11 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
         for call in tool_calls:
             if call.get("name") == "emit_ui_blocks":
                 args = call.get("args") or {}
-                blocks = args.get("blocks")
+                blocks = _normalize_blocks(args.get("blocks") or [])
                 if blocks:
                     for b in blocks:
-                        if b.get("type") == "markdown" and "content" in b.get(
-                            "data", {}
-                        ):
-                            b["data"]["content"] = _fix_markdown_links(
-                                b["data"]["content"]
-                            )
+                        if b.get("type") == "markdown" and "content" in b.get("data", {}):
+                            b["data"]["content"] = _fix_markdown_links(b["data"]["content"])
                     return blocks
 
     # 3. JSON blocks embedded in content string.
@@ -167,14 +188,10 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
             try:
                 parsed = json.loads(content)
                 if isinstance(parsed, dict) and parsed.get("blocks"):
-                    blocks = parsed["blocks"]
+                    blocks = _normalize_blocks(parsed["blocks"])
                     for b in blocks:
-                        if b.get("type") == "markdown" and "content" in b.get(
-                            "data", {}
-                        ):
-                            b["data"]["content"] = _fix_markdown_links(
-                                b["data"]["content"]
-                            )
+                        if b.get("type") == "markdown" and "content" in b.get("data", {}):
+                            b["data"]["content"] = _fix_markdown_links(b["data"]["content"])
                     return blocks
             except json.JSONDecodeError:
                 pass

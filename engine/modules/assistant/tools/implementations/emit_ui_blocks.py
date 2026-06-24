@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class EmitUIBlocksToolInput(BaseModel):
-    blocks: Optional[List[Union[UIBlock, Dict[str, Any]]]] = None
+    blocks: Optional[List[UIBlock]] = None
 
 
 class EmitUIBlocksTool(BaseTool):
