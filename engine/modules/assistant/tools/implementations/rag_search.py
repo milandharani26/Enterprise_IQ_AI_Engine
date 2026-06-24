@@ -45,6 +45,7 @@ from ..base_tool import BaseTool, ToolContext, ToolProperties, ToolCategory
 from engine.modules.assistant.tools.exceptions import (
     ToolExecutionError,
     ConfigurationError,
+    SecurityGuardrailError,
 )
 
 logger = logging.getLogger(__name__)
@@ -1072,6 +1073,37 @@ class RAGSearchTool(BaseTool):
         return final_chunks
 
     # ─────────────────────────────────────────────────────────────────────────
+    # Guardrail enforcement
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _check_document_guardrails(
+        self,
+        chunks: List[Dict[str, Any]],
+        ctx: ToolContext,
+    ) -> None:
+        """Raise SecurityGuardrailError if any result violates active guardrails."""
+        guardrails = (ctx.guardrails or "").strip().lower() if ctx else ""
+        if not guardrails:
+            return
+
+        blocked_titles = [
+            chunk.get("title", "") for chunk in chunks
+            if chunk.get("title", "").lower() in guardrails
+        ]
+        if blocked_titles:
+            logger.warning(
+                "[GUARDRAIL] Document access denied — titles: %s",
+                blocked_titles,
+            )
+            logger.warning("[GUARDRAIL] Skipping LLM generation")
+            logger.warning("[GUARDRAIL] Returning static response")
+            target = blocked_titles[0]
+            raise SecurityGuardrailError(
+                f"I cannot provide information from the document '{target}' "
+                f"as per the established guardrails."
+            )
+
+    # ─────────────────────────────────────────────────────────────────────────
     # Public entry points
     # ─────────────────────────────────────────────────────────────────────────
 
@@ -1092,6 +1124,7 @@ class RAGSearchTool(BaseTool):
         chunks = await self._search_async(
             query, organization_id, top_k, similarity_threshold, use_pool=True
         )
+        self._check_document_guardrails(chunks, ctx)
         return self._format_results(query, chunks)
 
     def _run(
@@ -1120,6 +1153,8 @@ class RAGSearchTool(BaseTool):
                     query, organization_id, top_k, similarity_threshold, use_pool=False
                 )
             )
+
+            self._check_document_guardrails(chunks, ctx)
 
             elapsed = time.time() - start_time
             logger.info(

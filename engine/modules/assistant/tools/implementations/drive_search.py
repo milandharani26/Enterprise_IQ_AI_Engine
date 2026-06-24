@@ -9,7 +9,11 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from ..base_tool import BaseTool, ToolContext, ToolProperties, ToolCategory
-from engine.modules.assistant.tools.exceptions import ToolExecutionError, ConfigurationError
+from engine.modules.assistant.tools.exceptions import (
+    ToolExecutionError,
+    ConfigurationError,
+    SecurityGuardrailError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -395,6 +399,37 @@ class DriveSearchTool(BaseTool):
         lines.append("=" * 60)
         return "\n".join(lines)
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # Guardrail enforcement
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _check_document_guardrails(
+        self,
+        chunks: List[Dict[str, Any]],
+        ctx: ToolContext,
+    ) -> None:
+        """Raise SecurityGuardrailError if any result violates active guardrails."""
+        guardrails = (ctx.guardrails or "").strip().lower() if ctx else ""
+        if not guardrails:
+            return
+
+        blocked_titles = [
+            chunk.get("title", "") for chunk in chunks
+            if chunk.get("title", "").lower() in guardrails
+        ]
+        if blocked_titles:
+            logger.warning(
+                "[DRIVE_GUARDRAIL] Access denied — titles: %s",
+                blocked_titles,
+            )
+            logger.warning("[DRIVE_GUARDRAIL] Skipping LLM generation")
+            logger.warning("[DRIVE_GUARDRAIL] Returning static response")
+            target = blocked_titles[0]
+            raise SecurityGuardrailError(
+                f"I cannot provide information from the Google Drive file "
+                f"'{target}' as per the established guardrails."
+            )
+
     async def _search_async(
         self,
         query: str,
@@ -429,6 +464,7 @@ class DriveSearchTool(BaseTool):
             chunks = asyncio.run(
                 self._search_async(query, organization_id, top_k, similarity_threshold)
             )
+            self._check_document_guardrails(chunks, ctx)
             return self._format_results(query, chunks)
 
         except Exception as e:
