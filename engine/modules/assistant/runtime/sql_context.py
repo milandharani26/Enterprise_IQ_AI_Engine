@@ -12,7 +12,7 @@ SQL_WORKFLOW_INSTRUCTIONS = """
 2. DO NOT just write the SQL query for the user. You MUST call the **sql_query** tool passing the user's natural language question so it can automatically run the query and give you the real data.
 3. The tool will generate, validate, and execute the SQL query on your behalf and return the database results.
 4. If the tool returns a GUARDRAIL_VIOLATION, inform the user that you cannot reveal that data.
-5. Once you have the real data from the tool, present your final response directly to the user in markdown format (using tables for tabular data, or natural sentences for counts/individual values). Do NOT call the emit_ui_blocks tool.
+5. Once you have the real data from the tool, present your final response directly to the user in markdown format (using tables for tabular data, or natural sentences for counts/individual values).
 """
 
 def enrich_config_for_sql(config_dict: Dict[str, Any]) -> Dict[str, Any]:
