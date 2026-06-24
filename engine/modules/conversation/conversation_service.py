@@ -1,4 +1,5 @@
 # modules/conversation/conversation_service.py
+import logging
 import uuid
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,9 @@ from engine.modules.conversation.conversation_schemas import NewUserMessagePaylo
 from engine.modules.organization.organization_models import Organization
 from engine.modules.assistant.assistant_models import Assistant
 from engine.modules.assistant.runtime.executor import AssistantExecutor
+
+logger = logging.getLogger(__name__)
+
 
 class ConversationService:
     def __init__(self, db: AsyncSession):
@@ -115,6 +119,7 @@ class ConversationService:
                 from engine.modules.assistant.semantic_cache import SemanticCacheService
                 
                 embed_svc = EmbeddingService()
+                logger.debug("Cache lookup start for assistant %s", assistant.assistant_id)
                 query_embedding = await embed_svc.embed_query(payload.content)
                 
                 cached_match = await SemanticCacheService.lookup_cache(
@@ -125,9 +130,11 @@ class ConversationService:
                 )
                 
                 if cached_match:
+                    logger.debug("Cache HIT for assistant %s", assistant.assistant_id)
                     ai_generated_text = cached_match.response
                     content_blocks = cached_match.sources or []
                 else:
+                    logger.debug("Cache MISS for assistant %s", assistant.assistant_id)
                     executor = AssistantExecutor()
                     ai_generated_text, content_blocks = await executor.execute(
                         session_id=str(payload.conversation_id),
@@ -140,6 +147,7 @@ class ConversationService:
                     )
                     
                     # Cache the result
+                    logger.debug("Cache write for assistant %s", assistant.assistant_id)
                     await SemanticCacheService.write_cache(
                         self.db,
                         assistant.assistant_id,

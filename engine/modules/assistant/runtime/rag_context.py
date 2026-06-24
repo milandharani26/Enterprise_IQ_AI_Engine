@@ -6,7 +6,7 @@ import logging
 from typing import Any, Dict, Optional, Union
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 logger = logging.getLogger(__name__)
 
@@ -81,28 +81,14 @@ async def fetch_indexed_document_inventory(
             result = await db.execute(query)
             docs = result.scalars().all()
 
-            # Count total for the message
-            count_query = select(
-                db.scalar(
-                    select(Document)
-                    .where(Document.status == "indexed", Document.deleted_at.is_(None))
-                    .with_only_columns(db.func.count())
-                )
+            # Count total indexed documents
+            count_query = select(func.count()).select_from(Document).where(
+                Document.status == "indexed",
+                Document.deleted_at.is_(None),
             )
             if org_uuid is not None:
-                count_query = select(
-                    db.scalar(
-                        select(Document)
-                        .where(
-                            Document.status == "indexed",
-                            Document.deleted_at.is_(None),
-                            Document.workspace_id == org_uuid,
-                        )
-                        .with_only_columns(db.func.count())
-                    )
-                )
-
-            # Simple count execution (we use len(docs) if we don't want to run a separate count, but let's just use a simple note)
+                count_query = count_query.where(Document.workspace_id == org_uuid)
+            total_count = await db.scalar(count_query) or len(docs)
 
         if not docs:
             if org_uuid is not None:
@@ -112,7 +98,7 @@ async def fetch_indexed_document_inventory(
                 )
             return "No indexed documents in the database yet."
 
-        lines = [f"Total indexed documents shown (preview): {len(docs)}", ""]
+        lines = [f"Total indexed documents shown (preview): {len(docs)} (total: {total_count})", ""]
         for index, doc in enumerate(docs, start=1):
             title = doc.title or doc.reference_id or "Untitled"
             chunk_count = doc.chunk_count or 0
