@@ -80,8 +80,8 @@ async def ingest_drive_file(
         ).scalars().first()
 
         if existing and existing.last_modified_in_drive and last_modified_dt:
-            if existing.last_modified_in_drive.timestamp() == last_modified_dt.timestamp() and existing.status == "indexed":
-                logger.info(f"[Drive Sync] Skipping '{title}' - hasn't changed since last sync.")
+            if existing.last_modified_in_drive.timestamp() == last_modified_dt.timestamp() and existing.status in ["indexed", "failed"]:
+                logger.debug(f"[Drive Sync] Skipping '{title}' - hasn't changed since last sync (Status: {existing.status}).")
                 return
 
         # 1. Register Document as Processing

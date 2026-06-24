@@ -29,7 +29,7 @@ DRIVE_WORKFLOW_INSTRUCTIONS = """
 3. For "what drive documents do you have": list titles from INDEXED GOOGLE DRIVE DOCUMENTS, then drive_search for summaries.
 4. Answer only from search excerpts. Do not use outside knowledge for drive document facts.
 5. CRITICAL: When outputting Google Drive Links, you MUST use strict Markdown format exactly like this: [Title](URL). Do NOT put any spaces, newlines, or line breaks between the closing bracket ']' and the opening parenthesis '('. If you break them apart, the link will fail to render.
-6. Format the answer in markdown and call **emit_ui_blocks** once with the final text.
+6. Format the answer directly in markdown.
 """
 
 

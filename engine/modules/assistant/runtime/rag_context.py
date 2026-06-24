@@ -29,7 +29,7 @@ RAG_WORKFLOW_INSTRUCTIONS = """
 2. Use the user's question as the search query (rephrase if needed for clarity).
 3. For "what documents do you have": list titles from INDEXED DOCUMENTS, then rag_search for summaries.
 4. Answer only from search excerpts. Do not use outside knowledge for document facts.
-5. Format the answer in markdown and call **emit_ui_blocks** once with the final text.
+5. Format the answer directly in markdown.
 """
 
 
