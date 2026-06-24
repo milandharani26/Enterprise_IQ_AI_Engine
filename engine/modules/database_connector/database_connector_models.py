@@ -40,6 +40,9 @@ class SchemaTable(Base):
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
+    # Relationship for eager loading columns
+    columns = relationship("SchemaColumn", foreign_keys="SchemaColumn.table_id", lazy="select")
+
 
 class SchemaColumn(Base):
     __tablename__ = "schema_columns"

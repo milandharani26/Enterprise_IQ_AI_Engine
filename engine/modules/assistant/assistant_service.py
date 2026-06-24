@@ -118,11 +118,15 @@ class AssistantService:
             system_instruction = assistant_instance.get_system_instruction(config_dict, required_tools)
             
             # Count tokens using tiktoken (cl100k_base is standard for GPT-4/3.5)
-            try:
-                encoding = tiktoken.get_encoding("cl100k_base")
-                token_count = len(encoding.encode(system_instruction))
-            except Exception:
-                token_count = 0
+            import asyncio
+            def _count_tokens(text: str) -> int:
+                try:
+                    encoding = tiktoken.get_encoding("cl100k_base")
+                    return len(encoding.encode(text))
+                except Exception:
+                    return 0
+
+            token_count = await asyncio.to_thread(_count_tokens, system_instruction)
                 
             return PreviewPromptResponse(
                 compiled_prompt=system_instruction,

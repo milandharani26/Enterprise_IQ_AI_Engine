@@ -22,8 +22,12 @@ class AuthService:
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-        # 2. Verify password
-        if not PasswordHelper.verify_password(data.password, user.password_hash):
+        # 2. Verify password (bcrypt is CPU-bound, run in thread pool)
+        import asyncio
+        is_valid = await asyncio.to_thread(
+            PasswordHelper.verify_password, data.password, user.password_hash
+        )
+        if not is_valid:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
         if not user.is_active:

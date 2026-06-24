@@ -43,13 +43,13 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-[64px] hover:w-[220px] transition-all duration-300 h-screen bg-secondary-bg backdrop-blur-2xl backdrop-saturate-[180%] shadow-[4px_0_24px_rgba(0,0,0,0.02)] border-r border-border-color flex flex-col fixed top-0 left-0 z-40 group overflow-hidden">
+    <aside className="w-[220px] h-screen bg-secondary-bg backdrop-blur-2xl backdrop-saturate-[180%] shadow-[4px_0_24px_rgba(0,0,0,0.02)] border-r border-border-color flex flex-col fixed top-0 left-0 z-40 overflow-hidden">
       <div className="h-[64px] border-b border-border-color flex items-center px-4 shrink-0">
         <div className="flex items-center gap-4 min-w-[200px]">
           <div className="text-accent-primary shrink-0 flex items-center justify-center">
             <Bot size={20} />
           </div>
-          <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity duration-75">
+          <div className="flex flex-col opacity-100">
             <h2 className="m-0 text-[13px] font-bold tracking-tight text-primary-text truncate uppercase">{companyName}</h2>
           </div>
         </div>
@@ -68,10 +68,10 @@ export function Sidebar() {
                   : 'text-secondary-text hover:bg-white/20 dark:hover:bg-white/5 hover:text-primary-text border-r-2 border-transparent'
               }`}
             >
-              <div className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-[8px] transition-colors ${isActive ? 'bg-accent-primary/20 backdrop-blur-md' : 'group-hover:bg-white/10'}`}>
+              <div className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-[8px] transition-colors ${isActive ? 'bg-accent-primary/20 backdrop-blur-md' : 'hover:bg-white/10'}`}>
                 <item.icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-accent-primary" : ""} />
               </div>
-              <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">{item.name}</span>
+              <span className="opacity-100 whitespace-nowrap">{item.name}</span>
             </Link>
           );
         })}
@@ -82,7 +82,7 @@ export function Sidebar() {
           <div className="w-8 h-8 shrink-0 rounded-[10px] bg-accent-secondary/20 backdrop-blur-md border border-accent-secondary/30 text-accent-secondary flex items-center justify-center font-bold text-[13px] shadow-[0_0_15px_rgba(0,0,0,0.1)] dark:shadow-[0_0_15px_rgba(255,255,255,0.1)]">
             A
           </div>
-          <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <div className="flex flex-col opacity-100">
             <span className="text-[13px] font-medium text-primary-text truncate">
               admin@company.com
             </span>
@@ -96,16 +96,16 @@ export function Sidebar() {
               : 'text-secondary-text hover:bg-white/20 dark:hover:bg-white/5 hover:text-primary-text border-r-2 border-transparent'
           }`}
         >
-          <div className="shrink-0 flex items-center justify-center">
-            <Settings size={20} />
+          <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-[8px]">
+            <Settings size={18} strokeWidth={pathname.startsWith('/settings') ? 2.5 : 2} className={pathname.startsWith('/settings') ? "text-accent-primary" : ""} />
           </div>
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-75 whitespace-nowrap">Settings</span>
+          <span className="opacity-100 whitespace-nowrap">Settings</span>
         </Link>
-        <Link href="/login" className="flex items-center gap-4 py-2 px-4 font-medium text-[13px] text-secondary-text transition-colors duration-75 hover:bg-card-bg hover:text-primary-text border-r-2 border-transparent">
-          <div className="shrink-0 flex items-center justify-center">
-            <LogOut size={20} />
+        <Link href="/login" className="flex items-center gap-4 py-2 px-4 font-medium text-[13px] text-secondary-text transition-colors duration-75 hover:bg-white/20 dark:hover:bg-white/5 hover:text-primary-text border-r-2 border-transparent">
+          <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-[8px]">
+            <LogOut size={18} />
           </div>
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-75 whitespace-nowrap">Logout</span>
+          <span className="opacity-100 whitespace-nowrap">Logout</span>
         </Link>
       </div>
     </aside>

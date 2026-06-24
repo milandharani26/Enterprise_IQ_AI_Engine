@@ -37,6 +37,7 @@ export default function AssistantDetailsClient() {
   const [isToolModalOpen, setIsToolModalOpen] = useState(false);
   const [isGuardrailModalOpen, setIsGuardrailModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDisableModalOpen, setIsDisableModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [previewResult, setPreviewResult] = useState<{ compiled_prompt: string; estimated_tokens: number; status: string; warnings: string[] } | null>(null);
 
@@ -106,10 +107,20 @@ export default function AssistantDetailsClient() {
   };
 
   const handleToggleStatus = () => {
+    setIsDisableModalOpen(true);
+  };
+
+  const confirmToggleStatus = () => {
     const newStatus = assistant?.status === 'enabled' ? false : true;
     statusMutation.mutate({ id, status_in: { status: newStatus ? 'enabled' : 'disabled' } }, {
-      onSuccess: () => toast.success(`Assistant ${newStatus ? 'enabled' : 'disabled'}.`),
-      onError: () => toast.error('Failed to update status.')
+      onSuccess: () => {
+        toast.success(`Assistant ${newStatus ? 'enabled' : 'disabled'}.`);
+        setIsDisableModalOpen(false);
+      },
+      onError: () => {
+        toast.error('Failed to update status.');
+        setIsDisableModalOpen(false);
+      }
     });
   };
 
@@ -487,6 +498,22 @@ export default function AssistantDetailsClient() {
           <Button variant="ghost" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
           <Button variant="primary" className="bg-accent-danger hover:bg-accent-danger/90 text-white border-transparent" onClick={confirmDelete} disabled={deleteMutation.isPending}>
             {deleteMutation.isPending ? 'Deleting...' : 'Yes, Delete Assistant'}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Disable/Enable Confirmation Modal */}
+      <Modal
+        isOpen={isDisableModalOpen}
+        onClose={() => setIsDisableModalOpen(false)}
+        title={assistant?.status === 'enabled' ? "Disable Assistant" : "Enable Assistant"}
+        description={assistant?.status === 'enabled' ? "Are you sure you want to disable this assistant? Applications depending on it will not be able to use it until you re-enable it." : "Are you sure you want to enable this assistant?"}
+        maxWidth="max-w-md"
+      >
+        <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-border-color">
+          <Button variant="ghost" onClick={() => setIsDisableModalOpen(false)}>Cancel</Button>
+          <Button variant="primary" onClick={confirmToggleStatus} disabled={statusMutation.isPending}>
+            {statusMutation.isPending ? 'Updating...' : (assistant?.status === 'enabled' ? 'Yes, Disable Assistant' : 'Yes, Enable Assistant')}
           </Button>
         </div>
       </Modal>
