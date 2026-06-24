@@ -136,7 +136,7 @@ class ConversationService:
                 else:
                     logger.debug("Cache MISS for assistant %s", assistant.assistant_id)
                     executor = AssistantExecutor()
-                    ai_generated_text, content_blocks = await executor.execute(
+                    ai_generated_text, content_blocks, exec_metadata = await executor.execute(
                         session_id=str(payload.conversation_id),
                         conversation_id=str(payload.conversation_id),
                         user_id=str(payload.user_id),
@@ -145,19 +145,22 @@ class ConversationService:
                         organization_ids=[str(org_id)],
                         assistant=assistant,
                     )
-                    
-                    # Cache the result
-                    logger.debug("Cache write for assistant %s", assistant.assistant_id)
-                    await SemanticCacheService.write_cache(
-                        self.db,
-                        assistant.assistant_id,
-                        payload.content,
-                        query_embedding,
-                        ai_generated_text,
-                        content_blocks,
-                        None,
-                        assistant.cache_version
-                    )
+
+                    # Cache the result (skip guardrail-blocked responses)
+                    if exec_metadata.get("response_type") == "guardrail_block":
+                        logger.debug("[CACHE] Skipping cache write for guardrail response")
+                    else:
+                        logger.debug("[CACHE] Cache write for assistant %s", assistant.assistant_id)
+                        await SemanticCacheService.write_cache(
+                            self.db,
+                            assistant.assistant_id,
+                            payload.content,
+                            query_embedding,
+                            ai_generated_text,
+                            content_blocks,
+                            None,
+                            assistant.cache_version
+                        )
             except Exception as e:
                 ai_generated_text = (
                     f"I encountered an error while processing your request: {e}"

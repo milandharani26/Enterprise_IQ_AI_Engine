@@ -216,7 +216,7 @@ class AssistantExecutor:
         query: str,
         organization_ids: List[str],
         assistant: Assistant,
-    ) -> Tuple[str, list]:
+    ) -> Tuple[str, list, dict]:
         logger.info(f"Executor called for query: {query}")
         organization_id = str(organization_ids[0]) if organization_ids else None
         config_dict = assistant_row_to_config_dict(assistant)
@@ -266,7 +266,7 @@ class AssistantExecutor:
         except SecurityGuardrailError as e:
             logger.warning("Agent execution short-circuited due to security guardrail.")
             static_msg = str(e)
-            return static_msg, [{"type": "markdown", "data": {"content": static_msg}}]
+            return static_msg, [{"type": "markdown", "data": {"content": static_msg}}], {"response_type": "guardrail_block"}
         except Exception as e:
             logger.exception("AGENT INVOCATION FAILED")
             raise
@@ -280,4 +280,4 @@ class AssistantExecutor:
 
         response_text = _extract_response_text(result)
         content_blocks = _extract_content_blocks(result, response_text)
-        return response_text, content_blocks
+        return response_text, content_blocks, {"response_type": "normal"}

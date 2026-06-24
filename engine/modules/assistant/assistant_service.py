@@ -68,6 +68,12 @@ class AssistantService:
         assistant = await AssistantService.get_assistant(db, assistant_id, org_id)
         
         update_data = obj_in.model_dump(exclude_unset=True)
+
+        # Bump cache_version when config-affecting fields change
+        config_fields = {"guardrails", "tools", "system_prompt"}
+        if config_fields & update_data.keys():
+            assistant.cache_version = assistant.cache_version + 1
+
         for field, value in update_data.items():
             setattr(assistant, field, value)
             
