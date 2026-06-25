@@ -260,7 +260,16 @@ export default function DocumentsPage() {
                             {doc.title || doc.reference_id}
                           </p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {doc.chunk_count} chunks · {new Date(doc.created_at).toLocaleString()}
+                            {doc.chunk_count} chunks · {new Date(doc.created_at).toLocaleString('en-IN', {
+                              timeZone: 'Asia/Kolkata',
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                              hour12: true,
+                            })} IST
                             {doc.processing_error && (
                               <span className="text-red-500 ml-2">{doc.processing_error}</span>
                             )}
@@ -341,7 +350,16 @@ export default function DocumentsPage() {
                           {doc.title}
                         </a>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {doc.mime_type} · {new Date(doc.updated_at).toLocaleString()}
+                          {doc.mime_type} · {new Date(doc.updated_at).toLocaleString('en-IN', {
+                            timeZone: 'Asia/Kolkata',
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            hour12: true,
+                          })} IST
                         </p>
                       </div>
                     </div>

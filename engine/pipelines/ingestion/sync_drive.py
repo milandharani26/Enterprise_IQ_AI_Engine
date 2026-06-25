@@ -214,7 +214,21 @@ async def sync_drive_files(query: str = None, limit: int = 50) -> int:
             # 2. Loop through each active organization/connector
             for connector, credential in active_connectors:
                 logger.info(f"Syncing Google Drive for Organization: {connector.organization_id}")
-                
+                workspace_id = str(connector.organization_id)
+
+                # Check the shared workspace lock to avoid concurrent syncs
+                # (e.g., this OAuth-triggered sync vs. the background poller).
+                try:
+                    from engine.shared.workers.drive_sync_worker import _syncing_workspaces
+                    if workspace_id in _syncing_workspaces:
+                        logger.info(
+                            f"[sync_drive] Skipping workspace {workspace_id} — already being synced by worker."
+                        )
+                        continue
+                    _syncing_workspaces.add(workspace_id)
+                except ImportError:
+                    pass
+
                 try:
                     drive_client = GoogleDriveClient(auth_data=credential.auth_data)
                     files = drive_client.list_files(query=query, page_size=limit)
@@ -225,10 +239,12 @@ async def sync_drive_files(query: str = None, limit: int = 50) -> int:
 
                     # 4. Clean up orphaned documents (files deleted from Drive)
                     returned_ids = {f["id"] for f in files}
+                    # Check ALL stored drive_file_ids for this workspace (any status).
+                    # Previously only "indexed" docs were checked, leaving failed/draft/
+                    # processing records from old sync runs as permanent ghost entries.
                     stored_result = await db.execute(
                         select(DriveDocument.drive_file_id).where(
                             DriveDocument.workspace_id == connector.organization_id,
-                            DriveDocument.status == "indexed",
                         )
                     )
                     stored_ids = {row[0] for row in stored_result.all()}
@@ -259,6 +275,14 @@ async def sync_drive_files(query: str = None, limit: int = 50) -> int:
                         
                 except Exception as e:
                     logger.error(f"Failed to sync for org {connector.organization_id}: {e}")
+                finally:
+                    # Always release the workspace lock after this sync attempt
+                    try:
+                        from engine.shared.workers.drive_sync_worker import _syncing_workspaces
+                        _syncing_workspaces.discard(workspace_id)
+                    except ImportError:
+                        pass
+
 
             return len(active_connectors)
 

@@ -14,10 +14,25 @@ from engine.pipelines.ingestion.sync_drive import ingest_drive_file
 
 logger = logging.getLogger(__name__)
 
+# Workspace-level lock: prevents two concurrent sync tasks (e.g. the background
+# poller AND the OAuth-triggered sync) from processing the same workspace at the
+# same time, which would create duplicate drive_document rows.
+_syncing_workspaces: set = set()
+
 
 async def _sync_drive_for_workspace(
     session, connector: Connector, credential: Credential
 ):
+    workspace_id = str(connector.organization_id)
+
+    # Skip if this workspace is already being synced by another task
+    if workspace_id in _syncing_workspaces:
+        logger.info(
+            f"[Drive Worker] Skipping workspace {workspace_id} — sync already in progress."
+        )
+        return
+
+    _syncing_workspaces.add(workspace_id)
     try:
         if not credential.auth_data:
             return
@@ -68,8 +83,9 @@ async def _sync_drive_for_workspace(
         returned_ids = {f["id"] for f in files}
         stored_result = await session.execute(
             select(DriveDocument.drive_file_id).where(
+                # Check ALL statuses — previously only "indexed" docs were checked,
+                # leaving failed/draft/processing ghost records forever.
                 DriveDocument.workspace_id == connector.organization_id,
-                DriveDocument.status == "indexed",
             )
         )
         stored_ids = {row[0] for row in stored_result.all()}
@@ -136,6 +152,8 @@ async def _sync_drive_for_workspace(
         )
         connector.sync_status = "failed"
         await session.commit()
+    finally:
+        _syncing_workspaces.discard(workspace_id)
 
 
 async def run_drive_sync_poll():

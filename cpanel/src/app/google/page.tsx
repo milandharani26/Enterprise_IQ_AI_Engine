@@ -12,6 +12,7 @@ export default function GoogleOAuthCallback() {
   const exchangeMutation = useExchangeGoogleOAuthCodeMutation();
   
   const [status, setStatus] = useState('Exchanging secure tokens...');
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   useEffect(() => {
     const code = searchParams.get('code');
@@ -22,17 +23,32 @@ export default function GoogleOAuthCallback() {
       return;
     }
 
+    // Use sessionStorage as a cross-remount guard.
+    // React Strict Mode (and Next.js App Router) mounts → unmounts → remounts
+    // the component in development, which resets useRef — causing the exchange
+    // to fire twice. The second attempt always fails with invalid_grant because
+    // Google authorization codes are single-use.
+    const guardKey = `oauth_exchange_fired_${state}`;
+    if (sessionStorage.getItem(guardKey)) {
+      return;
+    }
+    sessionStorage.setItem(guardKey, '1');
+
     exchangeMutation.mutate(
       { code, state },
       {
         onSuccess: () => {
           setStatus('Success! Redirecting back to credentials...');
+          sessionStorage.removeItem(guardKey);
           setTimeout(() => {
             router.push('/credentials');
           }, 1500);
         },
-        onError: () => {
-          setStatus('Failed to exchange tokens. Please try again.');
+        onError: (error: any) => {
+          sessionStorage.removeItem(guardKey);
+          const detail = error?.response?.data?.detail || 'Failed to exchange tokens.';
+          setStatus('Authorization failed.');
+          setErrorDetail(detail);
         }
       }
     );
@@ -61,14 +77,19 @@ export default function GoogleOAuthCallback() {
           <p className="text-gray-500 dark:text-gray-400 text-sm">
             {status}
           </p>
+          {errorDetail && (
+            <p className="mt-3 text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-lg px-3 py-2 text-left">
+              {errorDetail}
+            </p>
+          )}
         </div>
         
-        {exchangeMutation.isError && (
+        {(exchangeMutation.isError || errorDetail) && (
           <button
             onClick={() => router.push('/credentials')}
             className="mt-4 px-4 py-2 text-sm rounded-lg font-medium bg-gray-900 dark:bg-white text-white dark:text-gray-900 w-full"
           >
-            Go Back
+            Go Back &amp; Retry
           </button>
         )}
       </div>
