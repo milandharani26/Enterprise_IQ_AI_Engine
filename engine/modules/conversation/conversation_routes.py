@@ -20,7 +20,10 @@ router = APIRouter(prefix="/conversations", tags=["Conversations & Chat Logs"])
 security = HTTPBearer(auto_error=False)
 jwt_service = JWTService()
 
-@router.post("/chat", response_model=MessageResponseSchema, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/chat", response_model=MessageResponseSchema, status_code=status.HTTP_201_CREATED
+)
 async def process_chat_message(
     payload: NewUserMessagePayloadSchema,
     db: AsyncSession = Depends(get_db),
@@ -70,26 +73,22 @@ async def fetch_chat_history(conversation_id: UUID, db: AsyncSession = Depends(g
     return await service.get_conversation_history(conversation_id)
 
 
-
 @router.get("/{conversation_id}", response_model=ConversationDetailResponseSchema)
 async def get_conversation_details(
-    
     conversation_id: UUID, db: AsyncSession = Depends(get_db)
-
 ):
     """Fetches full conversational session tracking details alongside its historical records."""
     from sqlalchemy.orm import selectinload
+
     result = await db.execute(
-        
         select(Conversation)
         .options(selectinload(Conversation.messages))
         .where(Conversation.id == conversation_id)
-    
     )
     conversation = result.scalar_one_or_none()
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conversation room trace missing",,
+            detail="Conversation room trace missing",
         )
     return conversation
