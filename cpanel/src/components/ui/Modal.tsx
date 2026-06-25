@@ -43,7 +43,7 @@ export function Modal({ isOpen, onClose, title, description, children, maxWidth 
           </div>
           <button 
             onClick={onClose}
-            className="text-muted-text hover:text-primary-text transition-colors p-1 -mr-2 -mt-2 hover:bg-tertiary-bg"
+            className="cursor-pointer text-muted-text hover:text-primary-text transition-colors p-1 -mr-2 -mt-2 hover:bg-tertiary-bg"
             aria-label="Close modal"
           >
             <X size={20} />

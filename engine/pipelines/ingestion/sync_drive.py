@@ -110,6 +110,9 @@ async def ingest_drive_file(
 
         # 3. Find correct loader
         export_mime_type = map_google_mime_type(mime_type)
+        if title and title.lower().endswith(".csv"):
+            export_mime_type = "text/csv"
+
         try:
             loader = LoaderRegistry.get_loader(export_mime_type)
         except Exception as e:

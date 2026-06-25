@@ -193,6 +193,9 @@ class DocumentService:
         if not file_bytes:
             raise DocumentLoadError("Empty file")
 
+        if filename and filename.lower().endswith(".csv"):
+            mime_type = "text/csv"
+
         detected_mime = mime_type or self._detect_mime_type(filename)
         if detected_mime == "application/octet-stream":
             guessed, _ = mimetypes.guess_type(filename)
@@ -229,6 +232,11 @@ class DocumentService:
         """Detect MIME type from URL path/filename (robust for presigned S3 URLs)."""
         import re
         from urllib.parse import parse_qs, unquote, urlparse
+
+        # 0) Explicit overrides for Windows registry bugs
+        path_without_query = unquote(uri).lower().split("?")[0]
+        if path_without_query.endswith(".csv"):
+            return "text/csv"
 
         parsed = urlparse(uri)
 
@@ -580,6 +588,9 @@ class DocumentService:
     ) -> dict:
         """Save upload to disk, create document record; indexing runs separately."""
         from engine.shared.config.settings import get_settings
+
+        if filename and filename.lower().endswith(".csv"):
+            mime_type = "text/csv"
 
         settings = get_settings()
         safe_name = Path(filename).name or "upload"

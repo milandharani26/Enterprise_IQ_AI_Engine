@@ -244,13 +244,6 @@ function AssistantCard({ assistant, index }: { assistant: Assistant; index: numb
           ) : (
             <Badge variant="outline">Disabled</Badge>
           )}
-          <button
-            className="text-muted-text hover:text-primary-text transition-colors p-1"
-            aria-label="More options"
-            onClick={(e) => e.preventDefault()}
-          >
-            <MoreVertical size={18} />
-          </button>
         </div>
       </div>
 
@@ -265,20 +258,7 @@ function AssistantCard({ assistant, index }: { assistant: Assistant; index: numb
         </p>
       </div>
 
-      {/* Bottom Stats & Actions */}
-      <div className="pt-5 border-t border-border-color flex items-center justify-between">
-        <Button
-          variant="secondary"
-          size="sm"
-          className="gap-2 bg-white/20 dark:bg-white/5 backdrop-blur-md border border-white/20 dark:border-white/10 hover:bg-white/30 dark:hover:bg-white/10 transition-all duration-300 group-hover:bg-accent-primary/90 group-hover:text-white group-hover:border-accent-primary"
-          onClick={(e) => {
-            e.preventDefault();
-          }}
-        >
-          <PlayCircle size={14} />
-          Playground
-        </Button>
-      </div>
+
     </Link>
   );
 }
