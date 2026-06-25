@@ -42,6 +42,18 @@ export default function ConnectorPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'connectors' | 'test'>('connectors');
   const [selectedCredentialId, setSelectedCredentialId] = useState<string>('');
+  const [localSyncingIds, setLocalSyncingIds] = useState<string[]>([]);
+
+  // Clear local syncing state if the real DB status has caught up and shows 'syncing' or 'synced' or 'failed'
+  useEffect(() => {
+    if (dbConnectors) {
+      setLocalSyncingIds(prev => prev.filter(id => {
+        const conn = dbConnectors.find((c: Connector) => c.id === id);
+        // Keep in local state only if the DB still hasn't registered it as syncing, synced, or failed
+        return conn && conn.sync_status !== 'syncing' && conn.sync_status !== 'synced' && conn.sync_status !== 'failed';
+      }));
+    }
+  }, [dbConnectors]);
 
   // Sync static Connectors to DB if they don't exist
   useEffect(() => {
@@ -90,13 +102,9 @@ export default function ConnectorPage() {
           }
         });
         
-        // If it's a database, auto-sync
-        if (selectedConnector.connector_id === 'postgres' || selectedConnector.connector_id === 'mysql') {
-          await syncConnectorMutation.mutateAsync(selectedConnector.id);
-          toast.success(`${selectedConnector.name} connector enabled and schema sync started!`);
-        } else {
-          toast.success(`${selectedConnector.name} connector enabled!`);
-        }
+        // Auto-sync immediately after enabling
+        await syncConnectorMutation.mutateAsync(selectedConnector.id);
+        toast.success(`${selectedConnector.name} connector enabled and data sync started!`);
       } catch (e: unknown) {
         console.error(e);
         toast.error(`Failed to enable ${selectedConnector.name} connector.`);
@@ -115,8 +123,8 @@ export default function ConnectorPage() {
 
   const getColorClasses = (colorBase: string) => {
     const map: Record<string, any> = {
-      blue: { bg: 'bg-blue-500/10 dark:bg-blue-500/20', text: 'text-blue-600 dark:text-blue-400', shadow: 'shadow-blue-500/20', border: 'border-blue-500/20' },
-      indigo: { bg: 'bg-indigo-500/10 dark:bg-indigo-500/20', text: 'text-indigo-600 dark:text-indigo-400', shadow: 'shadow-indigo-500/20', border: 'border-indigo-500/20' },
+      blue: { bg: 'bg-blue-500/10 dark:bg-blue-500/20', text: 'text-blue-600 dark:text-blue-400', shadow: 'shadow-blue-500/20', border: 'border-blue-500/20', cardBorder: 'border-blue-500/30 dark:border-blue-500/20' },
+      indigo: { bg: 'bg-indigo-500/10 dark:bg-indigo-500/20', text: 'text-indigo-600 dark:text-indigo-400', shadow: 'shadow-indigo-500/20', border: 'border-indigo-500/20', cardBorder: 'border-indigo-500/30 dark:border-indigo-500/20' },
     };
     return map[colorBase] || map.blue;
   };
@@ -161,7 +169,7 @@ export default function ConnectorPage() {
               <div
                 key={connector.id}
                 className={`group relative p-6 rounded-3xl bg-white/50 dark:bg-[#111113]/50 backdrop-blur-xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${isEnabled
-                  ? `border-${meta.colorBase}-500/30 dark:border-${meta.colorBase}-500/20 shadow-lg ${colors.shadow}`
+                  ? `${colors.cardBorder} shadow-lg ${colors.shadow}`
                   : 'border-black/10 dark:border-white/10 hover:border-black/20 dark:hover:border-white/20'
                   }`}
               >
@@ -202,7 +210,7 @@ export default function ConnectorPage() {
                   {isMapped ? 'Credentials successfully mapped.' : 'No credential mapped yet.'}
                 </p>
 
-                {connector.status === 'enabled' && (connector.connector_id === 'postgres' || connector.connector_id === 'mysql') && (
+                {connector.status === 'enabled' && (
                   <div className="mt-4 pt-4 border-t border-black/5 dark:border-white/5 flex items-center justify-between">
                     <div className="flex flex-col">
                       <span className="text-xs text-gray-500 dark:text-gray-400">Sync Status</span>
@@ -214,11 +222,14 @@ export default function ConnectorPage() {
                       </span>
                     </div>
                     <button
-                      onClick={() => syncConnectorMutation.mutate(connector.id)}
-                      disabled={connector.sync_status === 'syncing'}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-900 dark:text-white transition-colors disabled:opacity-50"
+                      onClick={() => {
+                        setLocalSyncingIds(prev => [...prev, connector.id]);
+                        syncConnectorMutation.mutate(connector.id);
+                      }}
+                      disabled={connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id)}
+                      className="cursor-pointer disabled:cursor-not-allowed px-3 py-1.5 rounded-lg text-xs font-medium bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-900 dark:text-white transition-colors disabled:opacity-50"
                     >
-                      {connector.sync_status === 'syncing' ? 'Syncing...' : 'Sync Schema'}
+                      {connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id) ? 'Syncing...' : 'Sync Data'}
                     </button>
                   </div>
                 )}

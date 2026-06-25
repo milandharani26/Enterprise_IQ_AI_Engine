@@ -93,6 +93,18 @@ export const useCredentialsHooks = () => {
     });
   };
 
+  const useRegenerateGoogleOAuthUrlMutation = () => {
+    return useMutation({
+      mutationFn: async (credentialId: string) => {
+        const { data } = await axios.post(`${API_URL}/credentials/oauth/google/${credentialId}/regenerate-url`);
+        return data as { auth_url: string; state: string };
+      },
+      onError: (error: any) => {
+        toast.error(error?.response?.data?.detail || 'Failed to regenerate OAuth URL');
+      },
+    });
+  };
+
   const useExchangeGoogleOAuthCodeMutation = () => {
     return useMutation({
       mutationFn: async (payload: { code: string; state: string }) => {
@@ -115,6 +127,7 @@ export const useCredentialsHooks = () => {
     useDeleteCredentialMutation,
     useTestCredentialMutation,
     useGenerateGoogleOAuthUrlMutation,
+    useRegenerateGoogleOAuthUrlMutation,
     useExchangeGoogleOAuthCodeMutation,
   };
 };

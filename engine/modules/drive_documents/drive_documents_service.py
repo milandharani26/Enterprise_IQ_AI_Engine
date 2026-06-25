@@ -120,24 +120,28 @@ class DriveDocumentService:
         if status:
             filters.append(DriveDocument.status == status)
 
-        total: int = (
-            await self.db.execute(select(func.count(DriveDocument.id)).where(and_(*filters)))
-        ).scalar() or 0
-
         descending = sort.startswith("-")
         field_name = sort.lstrip("-")
         col = getattr(DriveDocument, field_name, DriveDocument.created_at)
         order_col = desc(col) if descending else asc(col)
 
-        rows = (
-            await self.db.execute(
-                select(DriveDocument)
-                .where(and_(*filters))
-                .order_by(order_col)
-                .limit(limit)
-                .offset(offset)
-            )
-        ).scalars().all()
+        # Single query with window function for total count (eliminates extra DB round trip)
+        count_col = func.count(DriveDocument.id).over().label("_total")
+        stmt = (
+            select(DriveDocument, count_col)
+            .where(and_(*filters))
+            .order_by(order_col)
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.db.execute(stmt)
+        raw_rows = result.all()
+
+        if not raw_rows:
+            return [], 0
+
+        total = raw_rows[0]._total
+        rows = [row[0] for row in raw_rows]
 
         return [self._to_response(d) for d in rows], total
 
