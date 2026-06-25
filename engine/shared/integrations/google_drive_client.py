@@ -86,15 +86,25 @@ class GoogleDriveClient:
                     "mimeType != 'application/vnd.google-apps.map'"
                 )
 
-            results = self.service.files().list(
-                q=query,
-                pageSize=page_size,
-                fields=fields,
-                spaces='drive'
-            ).execute()
-            
-            files = results.get('files', [])
-            return files
+            all_files: List[Dict[str, Any]] = []
+            page_token = None
+            while True:
+                params = dict(
+                    q=query,
+                    pageSize=page_size,
+                    fields=fields,
+                    spaces='drive',
+                )
+                if page_token:
+                    params["pageToken"] = page_token
+
+                results = self.service.files().list(**params).execute()
+                all_files.extend(results.get("files", []))
+                page_token = results.get("nextPageToken")
+                if not page_token:
+                    break
+
+            return all_files
         except Exception as e:
             logger.error(f"Failed to list Google Drive files: {e}")
             raise

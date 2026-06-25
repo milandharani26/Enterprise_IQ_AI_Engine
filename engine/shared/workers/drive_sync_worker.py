@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from engine.shared.models.connector_model import Connector
 from engine.shared.models.credential_model import Credential
+from engine.shared.models.drive_document_model import DriveDocument
 from engine.shared.integrations.google_drive_client import GoogleDriveClient
 from engine.modules.drive_documents.drive_documents_service import DriveDocumentService
 from engine.pipelines.ingestion.sync_drive import ingest_drive_file
@@ -34,15 +35,46 @@ async def _sync_drive_for_workspace(session, connector: Connector, credential: C
         )
 
         files = client.list_files(query=query)
-        if not files:
-            return
 
-        logger.info(f"Drive Sync: Found {len(files)} updated files for workspace {connector.organization_id}")
-        
         service = DriveDocumentService(session)
+        credential_id = connector.id
         for file in files:
-            await ingest_drive_file(file, connector.organization_id, client, service)
-            
+            await ingest_drive_file(file, connector.organization_id, client, service, credential_id=credential_id)
+
+        # Clean up orphaned documents (files deleted from Drive)
+        returned_ids = {f["id"] for f in files}
+        stored_result = await session.execute(
+            select(DriveDocument.drive_file_id).where(
+                DriveDocument.workspace_id == connector.organization_id,
+                DriveDocument.status == "indexed",
+            )
+        )
+        stored_ids = {row[0] for row in stored_result.all()}
+        orphan_ids = stored_ids - returned_ids
+        if orphan_ids:
+            logger.info(f"[DRIVE_SYNC] Deleted file(s) detected: {len(orphan_ids)} orphan(s) for workspace {connector.organization_id}")
+            for orphan_file_id in orphan_ids:
+                logger.info(f"[DRIVE_SYNC] Removing vectors for drive_file_id={orphan_file_id}")
+                logger.info(f"[DRIVE_SYNC] Removing metadata for drive_file_id={orphan_file_id}")
+                await service.delete_by_drive_file_id(orphan_file_id, connector.organization_id)
+            # Invalidate semantic cache
+            from engine.modules.assistant.semantic_cache import SemanticCacheService
+            await SemanticCacheService.invalidate_workspace_cache(session, connector.organization_id)
+            logger.info(f"[DRIVE_SYNC] Cleanup completed for workspace {connector.organization_id} — semantic cache invalidated")
+        else:
+            logger.info(f"[DRIVE_SYNC] No deleted files detected for workspace {connector.organization_id}")
+
+        if files:
+            logger.info(f"[DRIVE_SYNC] Processed {len(files)} files, removed {len(orphan_ids)} orphans for workspace {connector.organization_id}")
+        else:
+            logger.info(f"[DRIVE_SYNC] No files returned from Drive — orphans cleaned up for workspace {connector.organization_id}")
+            pending_orphans = stored_ids - set()
+            if pending_orphans:
+                logger.info(f"[DRIVE_SYNC] Removing all stored documents (all files deleted from Drive) for workspace {connector.organization_id}")
+                for file_id in pending_orphans:
+                    await service.delete_by_drive_file_id(file_id, connector.organization_id)
+                from engine.modules.assistant.semantic_cache import SemanticCacheService
+                await SemanticCacheService.invalidate_workspace_cache(session, connector.organization_id)
     except Exception as e:
         logger.error(f"Drive Sync failed for workspace {connector.organization_id}: {e}")
 

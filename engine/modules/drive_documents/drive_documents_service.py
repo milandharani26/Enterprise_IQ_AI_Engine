@@ -34,7 +34,6 @@ class DriveDocumentService:
         request: DriveDocumentIngestRequest,
         workspace_id: UUID,
     ) -> DriveDocument:
-        """Create or update a Drive document ingestion record."""
         existing = (
             await self.db.execute(
                 select(DriveDocument).where(
@@ -57,6 +56,8 @@ class DriveDocumentService:
             existing.metadata_ = request.metadata
             existing.last_modified_in_drive = request.last_modified_in_drive
             existing.version += 1
+            if request.credential_id is not None:
+                existing.credential_id = request.credential_id
 
             existing.status = "draft"
             existing.processing_error = None
@@ -74,6 +75,7 @@ class DriveDocumentService:
 
         document = DriveDocument(
             workspace_id=workspace_id,
+            credential_id=request.credential_id,
             drive_file_id=request.drive_file_id,
             title=request.title,
             web_view_link=request.web_view_link,
@@ -186,6 +188,20 @@ class DriveDocumentService:
             raise DocumentNotFoundError()
         await self.db.commit()
 
+    async def delete_by_drive_file_id(self, drive_file_id: str, workspace_id: UUID) -> bool:
+        """Delete a Drive document and its chunks (CASCADE) by drive_file_id."""
+        result = await self.db.execute(
+            delete(DriveDocument).where(
+                DriveDocument.drive_file_id == drive_file_id,
+                DriveDocument.workspace_id == workspace_id,
+            )
+        )
+        if result.rowcount == 0:
+            return False
+        await self.db.commit()
+        logger.info(f"Deleted orphaned DriveDocument: file_id={drive_file_id} workspace={workspace_id}")
+        return True
+
     async def set_processing_status(
         self,
         document_id: UUID,
@@ -238,6 +254,7 @@ class DriveDocumentService:
                 DriveDocumentChunk(
                     drive_document_id=document_id,
                     workspace_id=workspace_id,
+                    drive_file_id=doc.drive_file_id,
                     sequence_number=data.get("sequence_number", i),
                     text=text_val,
                     token_count=data.get("token_count"),
@@ -271,6 +288,7 @@ class DriveDocumentService:
         return DriveDocumentResponse(
             id=doc.id,
             workspace_id=doc.workspace_id,
+            credential_id=doc.credential_id,
             drive_file_id=doc.drive_file_id,
             drive_folder_id=doc.drive_folder_id,
             owner_email=doc.owner_email,

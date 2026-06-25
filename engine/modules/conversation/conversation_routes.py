@@ -7,26 +7,30 @@ from engine.shared.core.security import JWTService
 from engine.modules.conversation.conversation_schemas import (
     NewUserMessagePayloadSchema,
     MessageResponseSchema,
-    ConversationDetailResponseSchema
-)  
+    ConversationDetailResponseSchema,
+)
 from engine.modules.conversation.conversation_service import ConversationService
 from engine.modules.conversation.conversation_models import Conversation
 from uuid import UUID
 from typing import List
+from engine.shared.core.middleware import require_service_account
 
-router = APIRouter(
-    prefix="/conversations",
-    tags=["Conversations & Chat Logs"]
-)
+router = APIRouter(prefix="/conversations", tags=["Conversations & Chat Logs"])
 
 security = HTTPBearer(auto_error=False)
 jwt_service = JWTService()
 
-@router.post("/chat", response_model=MessageResponseSchema, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/chat",
+    response_model=MessageResponseSchema,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_service_account)],
+)
 async def process_chat_message(
-    payload: NewUserMessagePayloadSchema, 
+    payload: NewUserMessagePayloadSchema,
     db: AsyncSession = Depends(get_db),
-    auth: HTTPAuthorizationCredentials = Depends(security)
+    auth: HTTPAuthorizationCredentials = Depends(security),
 ):
     """
     Primary real-time chat execution hub.
@@ -39,12 +43,17 @@ async def process_chat_message(
         try:
             from jose import jwt
             from engine.shared.config import get_settings
+
             settings = get_settings()
-            service_secret = getattr(settings, "service_token_secret_key", "dev-service-token-secret-key")
-            
+            service_secret = getattr(
+                settings, "service_token_secret_key", "dev-service-token-secret-key"
+            )
+
             # Decode using the Service Token Secret Key
-            token_data = jwt.decode(auth.credentials, service_secret, algorithms=["HS256"])
-            
+            token_data = jwt.decode(
+                auth.credentials, service_secret, algorithms=["HS256"]
+            )
+
             if token_data:
                 token_org_id = token_data.get("organization_id")
                 if token_org_id:
@@ -59,20 +68,26 @@ async def process_chat_message(
     service = ConversationService(db)
     return await service.handle_chat_turn(payload)
 
+
 @router.get("/{conversation_id}/history", response_model=List[MessageResponseSchema])
 async def fetch_chat_history(conversation_id: UUID, db: AsyncSession = Depends(get_db)):
     """Returns all message instances ordered by chronology for a given conversation session."""
     service = ConversationService(db)
     return await service.get_conversation_history(conversation_id)
 
+
 @router.get("/{conversation_id}", response_model=ConversationDetailResponseSchema)
-async def get_conversation_details(conversation_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_conversation_details(
+    conversation_id: UUID, db: AsyncSession = Depends(get_db)
+):
     """Fetches full conversational session tracking details alongside its historical records."""
-    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
+    result = await db.execute(
+        select(Conversation).where(Conversation.id == conversation_id)
+    )
     conversation = result.scalar_one_or_none()
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conversation room trace missing"
+            detail="Conversation room trace missing",
         )
     return conversation

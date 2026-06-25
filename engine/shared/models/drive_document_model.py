@@ -38,6 +38,7 @@ class DriveDocument(Base):
         server_default=text("gen_random_uuid()"),
     )
     workspace_id = Column(UUID(as_uuid=True), nullable=False)
+    credential_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     
     # Google Drive Specific Identifiers
     drive_file_id = Column(String(255), nullable=False, index=True)
@@ -95,6 +96,7 @@ class DriveDocumentChunk(Base):
         nullable=False,
     )
     workspace_id = Column(UUID(as_uuid=True), nullable=False)
+    drive_file_id = Column(String(255), nullable=True, index=True)
     sequence_number = Column(Integer, nullable=False)
     text = Column(Text, nullable=False)
     token_count = Column(Integer, nullable=True)

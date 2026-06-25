@@ -44,7 +44,8 @@ async def ingest_drive_file(
     file_info: dict, 
     workspace_id: UUID,
     drive_client: GoogleDriveClient,
-    service: DriveDocumentService
+    service: DriveDocumentService,
+    credential_id: Optional[UUID] = None,
 ) -> None:
     """Download, chunk, embed, and save a single drive file."""
     doc_id = None
@@ -83,6 +84,10 @@ async def ingest_drive_file(
             if existing.last_modified_in_drive.timestamp() == last_modified_dt.timestamp() and existing.status in ["indexed", "failed"]:
                 logger.debug(f"[Drive Sync] Skipping '{title}' - hasn't changed since last sync (Status: {existing.status}).")
                 return
+            else:
+                logger.info(f"[DRIVE_SYNC] Modified file detected: drive_file_id={drive_file_id} title='{title}'")
+        else:
+            logger.info(f"[DRIVE_SYNC] New file detected: drive_file_id={drive_file_id} title='{title}'")
 
         # 1. Register Document as Processing
         owners = file_info.get("owners", [])
@@ -96,7 +101,8 @@ async def ingest_drive_file(
             web_content_link=file_info.get("webContentLink"),
             owner_email=owner_email,
             file_size_bytes=int(file_info.get("size", 0)) if file_info.get("size") else None,
-            last_modified_in_drive=last_modified_dt
+            last_modified_in_drive=last_modified_dt,
+            credential_id=credential_id,
         )
         
         doc = await service.create_drive_document(ingest_req, workspace_id)
@@ -187,6 +193,7 @@ async def sync_drive_files(query: str = None, limit: int = 50) -> int:
     try:
         from engine.shared.models.connector_model import Connector
         from engine.shared.models.credential_model import Credential
+        from engine.shared.models.drive_document_model import DriveDocument
         from sqlalchemy import select
 
         async with AsyncSessionLocal() as db:
@@ -211,14 +218,44 @@ async def sync_drive_files(query: str = None, limit: int = 50) -> int:
                 try:
                     drive_client = GoogleDriveClient(auth_data=credential.auth_data)
                     files = drive_client.list_files(query=query, page_size=limit)
-                    
-                    if not files:
-                        logger.info(f"No files found in Google Drive for Org {connector.organization_id}")
-                        continue
 
                     # 3. Process files for this organization
                     for f in files:
-                        await ingest_drive_file(f, connector.organization_id, drive_client, service)
+                        await ingest_drive_file(f, connector.organization_id, drive_client, service, credential_id=connector.id)
+
+                    # 4. Clean up orphaned documents (files deleted from Drive)
+                    returned_ids = {f["id"] for f in files}
+                    stored_result = await db.execute(
+                        select(DriveDocument.drive_file_id).where(
+                            DriveDocument.workspace_id == connector.organization_id,
+                            DriveDocument.status == "indexed",
+                        )
+                    )
+                    stored_ids = {row[0] for row in stored_result.all()}
+                    orphan_ids = stored_ids - returned_ids
+                    if orphan_ids:
+                        logger.info(f"[DRIVE_SYNC] Deleted file(s) detected: {len(orphan_ids)} orphan(s) for workspace {connector.organization_id}")
+                        for orphan_file_id in orphan_ids:
+                            logger.info(f"[DRIVE_SYNC] Removing vectors for drive_file_id={orphan_file_id}")
+                            logger.info(f"[DRIVE_SYNC] Removing metadata for drive_file_id={orphan_file_id}")
+                            await service.delete_by_drive_file_id(orphan_file_id, connector.organization_id)
+                        # Invalidate semantic cache so assistants stop quoting deleted content
+                        from engine.modules.assistant.semantic_cache import SemanticCacheService
+                        await SemanticCacheService.invalidate_workspace_cache(db, connector.organization_id)
+                        logger.info(f"[DRIVE_SYNC] Cleanup completed for workspace {connector.organization_id} — semantic cache invalidated")
+                    else:
+                        logger.info(f"[DRIVE_SYNC] No deleted files detected for workspace {connector.organization_id}")
+
+                    if not files:
+                        logger.info(f"[DRIVE_SYNC] No files returned from Drive — orphans cleaned up for workspace {connector.organization_id}")
+                        pending_orphans = stored_ids - set()
+                        if pending_orphans:
+                            logger.info(f"[DRIVE_SYNC] Removing all stored documents (all files deleted from Drive) for workspace {connector.organization_id}")
+                            for file_id in pending_orphans:
+                                await service.delete_by_drive_file_id(file_id, connector.organization_id)
+                            from engine.modules.assistant.semantic_cache import SemanticCacheService
+                            await SemanticCacheService.invalidate_workspace_cache(db, connector.organization_id)
+                        continue
                         
                 except Exception as e:
                     logger.error(f"Failed to sync for org {connector.organization_id}: {e}")

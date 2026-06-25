@@ -20,6 +20,7 @@ class DriveDocumentIngestRequest(BaseModel):
     file_size_bytes: Optional[int] = Field(None)
     metadata: Optional[Dict[str, Any]] = Field(None)
     last_modified_in_drive: Optional[datetime] = Field(None)
+    credential_id: Optional[UUID] = Field(None, description="The credential used to sync this file")
 
 
 class DriveDocumentUpdateMetadataRequest(BaseModel):
@@ -33,6 +34,7 @@ class DriveDocumentUpdateMetadataRequest(BaseModel):
 class DriveDocumentResponse(BaseModel):
     id: UUID
     workspace_id: UUID
+    credential_id: Optional[UUID] = None
     drive_file_id: str
     drive_folder_id: Optional[str] = None
     owner_email: Optional[str] = None
