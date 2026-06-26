@@ -164,9 +164,13 @@ class SqlGenerationService:
         schema_context: str,
         database_type: str,
         guardrails: Optional[str] = None,
+        conversation_history: Optional[list] = None,
     ) -> str:
         """
         Generates the SQL query based on the database schema and question, enforcing guardrails.
+        conversation_history is a list of {"role": "user"/"assistant", "content": "..."} dicts
+        representing recent turns — used so the LLM can resolve follow-up questions like
+        "whose details is this?" by referencing what was discussed before.
         """
         system_instructions = (
             "You are an expert SQL Data Analyst. Your job is to write a syntactically correct "
@@ -192,8 +196,37 @@ class SqlGenerationService:
             '4. ALWAYS use double quotes around ALL table and column names (e.g., "createdAt") to preserve case sensitivity.\n'
         )
 
+        # Build conversation history block if available
+        history_block = ""
+        if conversation_history:
+            logger.info(
+                "[SqlGeneration] Injecting %d history messages into prompt",
+                len(conversation_history),
+            )
+            lines = []
+            for msg in conversation_history:
+                role_label = "User" if msg.get("role") == "user" else "Assistant"
+                lines.append(f"{role_label}: {msg.get('content', '').strip()}")
+            if lines:
+                history_block = (
+                    "\n\nCONVERSATION HISTORY:\n"
+                    "The following is the recent conversation. Use it to:\n"
+                    "- Extract any names, IDs, or values the user mentioned (e.g. 'I am Priyank Godhani' → use 'Priyank Godhani' as a WHERE filter)\n"
+                    "- Resolve pronouns like 'my', 'their', 'same person', 'whose' by referencing what was said earlier\n"
+                    "- If the user said their name or identity, use it directly as a filter in the SQL WHERE clause\n"
+                    "- NEVER query for placeholder values — always extract real values from this history\n\n"
+                    + "\n".join(lines)
+                    + "\n\n"
+                    "Now use the above context to write the SQL for the CURRENT question below.\n"
+                )
+
+        else:
+            logger.info(
+                "[SqlGeneration] No conversation history available — generating SQL without context"
+            )
+
         prompt = PromptTemplate.from_template(
-            system_instructions + "USER QUESTION: {question}\nSQL QUERY:"
+            system_instructions + "{history_block}USER QUESTION: {question}\nSQL QUERY:"
         )
 
         chain = prompt | self.llm
@@ -204,6 +237,7 @@ class SqlGenerationService:
                     "schema_context": schema_context,
                     "database_type": database_type.upper(),
                     "guardrails": guardrails or "",
+                    "history_block": history_block,
                 }
             )
             # FIX: use _extract_text() so this works whether content is a str or a list
