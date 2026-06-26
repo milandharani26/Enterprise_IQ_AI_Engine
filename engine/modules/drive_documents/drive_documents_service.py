@@ -9,7 +9,11 @@ from sqlalchemy import select, and_, func, desc, asc, delete
 from sqlalchemy.orm.attributes import flag_modified
 
 from engine.shared.core.deps import BaseDeps
-from engine.shared.exceptions.exceptions import DocumentNotFoundError, InvalidChunkError, InvalidDocumentStatusError
+from engine.shared.exceptions.exceptions import (
+    DocumentNotFoundError,
+    InvalidChunkError,
+    InvalidDocumentStatusError,
+)
 from engine.shared.models.drive_document_model import DriveDocument, DriveDocumentChunk
 from engine.shared.schemas.drive_document_schema import (
     DriveDocumentIngestRequest,
@@ -36,15 +40,19 @@ class DriveDocumentService:
     ) -> DriveDocument:
         """Create or update a Drive document ingestion record."""
         existing = (
-            await self.db.execute(
-                select(DriveDocument).where(
-                    and_(
-                        DriveDocument.workspace_id == workspace_id,
-                        DriveDocument.drive_file_id == request.drive_file_id,
+            (
+                await self.db.execute(
+                    select(DriveDocument).where(
+                        and_(
+                            DriveDocument.workspace_id == workspace_id,
+                            DriveDocument.drive_file_id == request.drive_file_id,
+                        )
                     )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
 
         if existing:
             existing.title = request.title
@@ -65,7 +73,9 @@ class DriveDocumentService:
             existing.chunk_count = 0
 
             await self.db.execute(
-                delete(DriveDocumentChunk).where(DriveDocumentChunk.drive_document_id == existing.id)
+                delete(DriveDocumentChunk).where(
+                    DriveDocumentChunk.drive_document_id == existing.id
+                )
             )
 
             await self.db.commit()
@@ -92,16 +102,22 @@ class DriveDocumentService:
         await self.db.refresh(document)
         return document
 
-    async def get_drive_document(self, document_id: UUID, workspace_id: UUID) -> DriveDocumentResponse:
+    async def get_drive_document(
+        self, document_id: UUID, workspace_id: UUID
+    ) -> DriveDocumentResponse:
         doc = await self._get_document_safe(document_id, workspace_id)
         return self._to_response(doc)
 
     async def get_document_status(self, document_id: UUID) -> str:
         doc = (
-            await self.db.execute(
-                select(DriveDocument).where(DriveDocument.id == document_id)
+            (
+                await self.db.execute(
+                    select(DriveDocument).where(DriveDocument.id == document_id)
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if not doc:
             raise DocumentNotFoundError()
         return doc.status
@@ -190,18 +206,21 @@ class DriveDocumentService:
             raise DocumentNotFoundError()
         await self.db.commit()
 
-    async def delete_by_drive_file_ids(self, workspace_id: UUID, drive_file_ids: List[str]) -> int:
+    async def delete_by_drive_file_ids(
+        self, workspace_id: UUID, drive_file_ids: List[str]
+    ) -> int:
         if not drive_file_ids:
             return 0
-        
+
         result = await self.db.execute(
             delete(DriveDocument).where(
                 and_(
                     DriveDocument.workspace_id == workspace_id,
-                    DriveDocument.drive_file_id.in_(drive_file_ids)
+                    DriveDocument.drive_file_id.in_(drive_file_ids),
                 )
             )
         )
+
         await self.db.commit()
         return result.rowcount
 
@@ -214,7 +233,7 @@ class DriveDocumentService:
     ) -> DriveDocumentResponse:
         if status not in ["draft", "processing", "indexed", "failed"]:
             raise InvalidDocumentStatusError()
-        
+
         doc = await self._get_document_safe(document_id, workspace_id)
         doc.status = status
         if status == "processing":
@@ -223,7 +242,7 @@ class DriveDocumentService:
             doc.processing_completed_at = func.now()
         if error:
             doc.processing_error = error
-            
+
         await self.db.commit()
         await self.db.refresh(doc)
         return self._to_response(doc)
@@ -236,11 +255,13 @@ class DriveDocumentService:
     ) -> int:
         if not chunks_data:
             raise InvalidChunkError()
-        
+
         doc = await self._get_document_safe(document_id, workspace_id)
 
         await self.db.execute(
-            delete(DriveDocumentChunk).where(DriveDocumentChunk.drive_document_id == document_id)
+            delete(DriveDocumentChunk).where(
+                DriveDocumentChunk.drive_document_id == document_id
+            )
         )
 
         for i, data in enumerate(chunks_data):
@@ -252,7 +273,7 @@ class DriveDocumentService:
                 text_val = text_val.replace("\x00", "")
             else:
                 text_val = str(text_val).replace("\x00", "")
-            
+
             self.db.add(
                 DriveDocumentChunk(
                     drive_document_id=document_id,
@@ -262,7 +283,7 @@ class DriveDocumentService:
                     token_count=data.get("token_count"),
                     embedding=data.get("embedding"),
                     embedding_model=data.get("embedding_model"),
-                    embedding_metadata=data.get("embedding_metadata")
+                    embedding_metadata=data.get("embedding_metadata"),
                 )
             )
 
@@ -270,17 +291,23 @@ class DriveDocumentService:
         await self.db.commit()
         return len(chunks_data)
 
-    async def _get_document_safe(self, document_id: UUID, workspace_id: UUID) -> DriveDocument:
+    async def _get_document_safe(
+        self, document_id: UUID, workspace_id: UUID
+    ) -> DriveDocument:
         doc = (
-            await self.db.execute(
-                select(DriveDocument).where(
-                    and_(
-                        DriveDocument.id == document_id,
-                        DriveDocument.workspace_id == workspace_id,
+            (
+                await self.db.execute(
+                    select(DriveDocument).where(
+                        and_(
+                            DriveDocument.id == document_id,
+                            DriveDocument.workspace_id == workspace_id,
+                        )
                     )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
 
         if not doc:
             raise DocumentNotFoundError()
