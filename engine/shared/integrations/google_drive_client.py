@@ -95,7 +95,9 @@ class GoogleDriveClient:
                     pageSize=page_size,
                     fields=fields,
                     spaces='drive',
-                    pageToken=page_token
+                    pageToken=page_token,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True
                 ).execute()
                 
                 files = results.get('files', [])
