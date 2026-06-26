@@ -211,10 +211,10 @@ export default function ChatPage() {
   const hasRag = selectedAssistant?.tools?.some((t: any) => t.tool_id === 'rag_search');
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] rounded-3xl overflow-hidden bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm relative">
+    <div className="flex flex-col h-[calc(100vh-8rem)] rounded-[16px] overflow-hidden bg-card-bg border border-border-color shadow-[0_4px_24px_rgba(0,0,0,0.02)] relative">
 
       <div className="w-full max-w-3xl mx-auto px-4 pt-4 shrink-0 z-20">
-        <div className="flex items-center justify-between gap-3 bg-black/5 dark:bg-white/5 backdrop-blur-xl border border-black/10 dark:border-white/10 rounded-full px-4 py-2 shadow-sm dark:shadow-2xl relative">
+        <div className="flex items-center justify-between gap-3 bg-card-hover backdrop-blur-xl border border-border-color rounded-full px-4 py-2 shadow-sm dark:shadow-2xl relative">
 
           <div className="flex items-center gap-2 pl-2">
             <Sparkles className="w-4 h-4 text-blue-500" />
@@ -233,7 +233,7 @@ export default function ChatPage() {
               <button
                 onClick={() => setShowAssistantPicker(!showAssistantPicker)}
                 disabled={assistantsLoading || !enabledAssistants.length}
-                className="flex items-center gap-2 rounded-full h-8 px-3 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs text-gray-700 dark:text-gray-300 transition-colors max-w-[180px]"
+                className="flex cursor-pointer items-center gap-2 rounded-full h-8 px-3 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs text-gray-700 dark:text-gray-300 transition-colors max-w-[180px] disabled:cursor-not-allowed"
               >
                 <Bot className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">
@@ -250,7 +250,7 @@ export default function ChatPage() {
                         setSelectedAssistant(ast);
                         setShowAssistantPicker(false);
                       }}
-                      className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5 ${
+                      className={`w-full cursor-pointer text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5 ${
                         selectedAssistant?.assistant_id === ast.assistant_id
                           ? 'text-blue-600 dark:text-blue-400'
                           : 'text-gray-700 dark:text-gray-300'
@@ -265,7 +265,7 @@ export default function ChatPage() {
 
             <button
               onClick={handleNewChat}
-              className="flex items-center justify-center rounded-full h-8 px-4 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs text-gray-700 dark:text-gray-300 transition-colors"
+              className="flex cursor-pointer items-center justify-center rounded-full h-8 px-4 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs text-gray-700 dark:text-gray-300 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5 mr-2" /> Clear
             </button>
@@ -319,7 +319,7 @@ export default function ChatPage() {
                       type="button"
                       onClick={() => onSuggestedQuestion(q)}
                       disabled={sendMutation.isPending || !activeOrganizationId}
-                      className="text-xs px-3 py-2 rounded-full border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:border-blue-300 dark:hover:border-blue-500/30 text-gray-700 dark:text-gray-300 transition-colors disabled:opacity-50"
+                      className="cursor-pointer text-xs px-3 py-2 rounded-full border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:border-blue-300 dark:hover:border-blue-500/30 text-gray-700 dark:text-gray-300 transition-colors disabled:opacity-50"
                     >
                       {q}
                     </button>
@@ -402,7 +402,7 @@ export default function ChatPage() {
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || sendMutation.isPending || !selectedAssistant || !activeOrganizationId}
-                className={`w-9 h-9 rounded-full p-0 flex items-center justify-center transition-all ${
+                className={`w-9 h-9 cursor-pointer rounded-full p-0 flex items-center justify-center transition-all ${
                   input.trim() && !sendMutation.isPending && selectedAssistant && activeOrganizationId
                     ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/30'
                     : 'bg-black/5 dark:bg-white/5 text-gray-400 dark:text-gray-500 cursor-not-allowed'

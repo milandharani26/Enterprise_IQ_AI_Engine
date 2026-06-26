@@ -190,6 +190,21 @@ class DriveDocumentService:
             raise DocumentNotFoundError()
         await self.db.commit()
 
+    async def delete_by_drive_file_ids(self, workspace_id: UUID, drive_file_ids: List[str]) -> int:
+        if not drive_file_ids:
+            return 0
+        
+        result = await self.db.execute(
+            delete(DriveDocument).where(
+                and_(
+                    DriveDocument.workspace_id == workspace_id,
+                    DriveDocument.drive_file_id.in_(drive_file_ids)
+                )
+            )
+        )
+        await self.db.commit()
+        return result.rowcount
+
     async def set_processing_status(
         self,
         document_id: UUID,

@@ -110,6 +110,9 @@ async def ingest_drive_file(
 
         # 3. Find correct loader
         export_mime_type = map_google_mime_type(mime_type)
+        if title and title.lower().endswith(".csv"):
+            export_mime_type = "text/csv"
+
         try:
             loader = LoaderRegistry.get_loader(export_mime_type)
         except Exception as e:
@@ -210,15 +213,35 @@ async def sync_drive_files(query: str = None, limit: int = 50) -> int:
                 
                 try:
                     drive_client = GoogleDriveClient(auth_data=credential.auth_data)
-                    files = drive_client.list_files(query=query, page_size=limit)
+                    fetch_all = not query
+                    files = drive_client.list_files(query=query, page_size=limit, fetch_all=fetch_all)
                     
-                    if not files:
-                        logger.info(f"No files found in Google Drive for Org {connector.organization_id}")
+                    if not files and not fetch_all:
+                        logger.info(f"No files found in Google Drive for Org {connector.organization_id} with query {query}")
                         continue
 
                     # 3. Process files for this organization
+                    current_drive_ids = set()
                     for f in files:
+                        if f.get("id"):
+                            current_drive_ids.add(f.get("id"))
                         await ingest_drive_file(f, connector.organization_id, drive_client, service)
+                        
+                    # 4. Handle Deletions (only if we fetched all files)
+                    if fetch_all:
+                        from engine.shared.models.drive_document_model import DriveDocument
+                        
+                        db_docs_result = await db.execute(
+                            select(DriveDocument.drive_file_id)
+                            .where(DriveDocument.workspace_id == connector.organization_id)
+                        )
+                        db_drive_ids = {row[0] for row in db_docs_result.all() if row[0]}
+                        
+                        deleted_drive_ids = db_drive_ids - current_drive_ids
+                        if deleted_drive_ids:
+                            logger.info(f"Deleting {len(deleted_drive_ids)} removed files from database for Org {connector.organization_id}.")
+                            deleted_count = await service.delete_by_drive_file_ids(connector.organization_id, list(deleted_drive_ids))
+                            logger.info(f"Successfully deleted {deleted_count} removed files.")
                         
                 except Exception as e:
                     logger.error(f"Failed to sync for org {connector.organization_id}: {e}")

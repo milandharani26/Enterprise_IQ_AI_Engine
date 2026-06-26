@@ -12,6 +12,7 @@ import {
   Globe,
   RefreshCw
 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useCredentialsHooks, Credential } from '@/hooks/api/useCredentials';
 import { useAppStore } from '@/store/useAppStore';
 const PROVIDERS = ['Google', 'PostgreSQL', 'MySQL'];
@@ -57,12 +58,22 @@ export default function CredentialsPage() {
 
   const [filterType, setFilterType] = useState('all');
 
+  const ITEMS_PER_PAGE = 10;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterType]);
+
   const filteredCredentials = (credentials || []).filter((c: Credential) => {
     const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           c.provider.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = filterType === 'all' ? true : c.provider === filterType;
     return matchesSearch && matchesType;
   });
+
+  const paginatedCredentials = filteredCredentials.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(filteredCredentials.length / ITEMS_PER_PAGE));
 
   const handleCreate = async () => {
     if (name && provider && activeOrganizationId) {
@@ -137,8 +148,7 @@ export default function CredentialsPage() {
   };
 
   return (
-    <div className="min-h-full p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="flex flex-col gap-8 h-full">
 
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-gray-200 dark:border-white/10 pb-6">
@@ -206,8 +216,19 @@ export default function CredentialsPage() {
 
               <div className="flex-1 p-0 overflow-x-auto">
                 {isLoading ? (
-                  <div className="px-5 py-12 flex items-center justify-center text-gray-500">Loading credentials...</div>
+                  <div className="flex flex-col p-4 gap-4">
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <div key={i} className="flex items-center gap-4">
+                        <Skeleton className="h-6 w-1/4" />
+                        <Skeleton className="h-6 w-1/6" />
+                        <Skeleton className="h-6 w-1/6" />
+                        <Skeleton className="h-6 w-1/6" />
+                        <Skeleton className="h-6 w-1/4" />
+                      </div>
+                    ))}
+                  </div>
                 ) : filteredCredentials.length > 0 ? (
+                  <>
                   <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead>
                       <tr className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-100 dark:border-white/5">
@@ -219,7 +240,7 @@ export default function CredentialsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                      {filteredCredentials.map((cred: Credential) => (
+                      {paginatedCredentials.map((cred: Credential) => (
                         <tr key={cred.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
@@ -271,6 +292,26 @@ export default function CredentialsPage() {
                       ))}
                     </tbody>
                   </table>
+                  {totalPages > 1 && (
+                    <div className="p-4 border-t border-gray-100 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-white/[0.02]">
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1.5 text-sm rounded-lg font-medium bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10 disabled:opacity-50 transition-colors"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-xs text-gray-500">Page {currentPage} of {totalPages}</span>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1.5 text-sm rounded-lg font-medium bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10 disabled:opacity-50 transition-colors"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                  </>
                 ) : (
                   <div className="px-5 py-12 flex flex-col items-center justify-center text-center">
                     <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-center mb-4 border border-gray-100 dark:border-white/5">
@@ -365,8 +406,8 @@ export default function CredentialsPage() {
                         <input
                           type="text"
                           value={googleRedirectUri}
-                          onChange={(e) => setGoogleRedirectUri(e.target.value)}
-                          className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
+                          disabled
+                          className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#1a1a1c] text-sm text-gray-500 dark:text-gray-400 cursor-not-allowed focus:outline-none transition-shadow"
                         />
                         <p className="text-xs text-gray-500 mt-1">Configured redirect URI for OAuth callback.</p>
                       </div>
@@ -415,15 +456,17 @@ export default function CredentialsPage() {
                 </div>
               </div>
 
-              <div className="px-6 py-4 bg-gray-50/80 dark:bg-white/5 border-t border-gray-200 dark:border-white/10 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={handleTestConnection}
-                  disabled={!provider || testCredentialMutation.isPending}
-                  className="px-4 py-2 text-sm rounded-lg font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors disabled:opacity-50"
-                >
-                  {testCredentialMutation.isPending ? 'Testing...' : 'Test Connection'}
-                </button>
+              <div className={`px-6 py-4 bg-gray-50/80 dark:bg-white/5 border-t border-gray-200 dark:border-white/10 flex items-center ${provider !== 'Google' ? 'justify-between' : 'justify-end'}`}>
+                {provider !== 'Google' && (
+                  <button
+                    type="button"
+                    onClick={handleTestConnection}
+                    disabled={!provider || testCredentialMutation.isPending}
+                    className="px-4 py-2 text-sm rounded-lg font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors disabled:opacity-50"
+                  >
+                    {testCredentialMutation.isPending ? 'Testing...' : 'Test Connection'}
+                  </button>
+                )}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setIsModalOpen(false)}
@@ -487,7 +530,6 @@ export default function CredentialsPage() {
           </div>
         </div>
       )}
-      </div>
     </div>
   );
 }

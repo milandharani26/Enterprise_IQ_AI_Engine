@@ -40,6 +40,8 @@ export default function AssistantDetailsClient() {
   const [isDisableModalOpen, setIsDisableModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [previewResult, setPreviewResult] = useState<{ compiled_prompt: string; estimated_tokens: number; status: string; warnings: string[] } | null>(null);
+  const [viewingGuardrail, setViewingGuardrail] = useState<any | null>(null);
+  const [viewingTool, setViewingTool] = useState<any | null>(null);
 
   const [formData, setFormData] = useState<{
     assistant_name: string;
@@ -281,7 +283,7 @@ export default function AssistantDetailsClient() {
               <div className="flex flex-col gap-2 mt-2">
                 <h3 className="text-xs font-semibold text-secondary-text uppercase tracking-wider mb-1">Configured Tools</h3>
                 {formData.tools.map((t, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-card-bg border border-border-color shadow-sm group transition-all hover:border-border-hover">
+                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-card-bg border border-border-color shadow-sm group transition-all hover:border-border-hover cursor-pointer" onClick={() => setViewingTool(t)}>
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-accent-primary/10 text-accent-primary rounded-lg">
                         <Blocks size={14} />
@@ -295,7 +297,8 @@ export default function AssistantDetailsClient() {
                       variant="ghost"
                       size="sm"
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-accent-danger hover:bg-accent-danger/10 hover:text-accent-danger h-8 w-8 p-0"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         const newTools = [...formData.tools];
                         newTools.splice(idx, 1);
                         setFormData({ ...formData, tools: newTools });
@@ -312,7 +315,7 @@ export default function AssistantDetailsClient() {
               <div className="flex flex-col gap-2 mt-2">
                 <h3 className="text-xs font-semibold text-secondary-text uppercase tracking-wider mb-1">Active Guardrails</h3>
                 {formData.guardrails.map((g, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-card-bg border border-border-color shadow-sm group transition-all hover:border-border-hover">
+                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-card-bg border border-border-color shadow-sm group transition-all hover:border-border-hover cursor-pointer" onClick={() => setViewingGuardrail(g)}>
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-accent-success/10 text-accent-success rounded-lg">
                         <Shield size={14} />
@@ -326,7 +329,8 @@ export default function AssistantDetailsClient() {
                       variant="ghost"
                       size="sm"
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-accent-danger hover:bg-accent-danger/10 hover:text-accent-danger h-8 w-8 p-0"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         const newGuardrails = [...formData.guardrails];
                         newGuardrails.splice(idx, 1);
                         setFormData({ ...formData, guardrails: newGuardrails });
@@ -413,6 +417,10 @@ export default function AssistantDetailsClient() {
               Cancel
             </Button>
             <Button variant="primary" type="button" onClick={() => {
+              if (formData.tools.some((t: any) => t.tool_id === newTool.tool_id || t.id === newTool.tool_id)) {
+                toast.error(`The tool '${newTool.tool_id}' is already configured.`);
+                return;
+              }
               setFormData({ ...formData, tools: [...formData.tools, newTool] });
               setNewTool({ tool_id: 'rag_search', credential_id: 'none', usage_instructions: '' });
               setIsToolModalOpen(false);
@@ -500,6 +508,84 @@ export default function AssistantDetailsClient() {
             {deleteMutation.isPending ? 'Deleting...' : 'Yes, Delete Assistant'}
           </Button>
         </div>
+      </Modal>
+
+      {/* View Guardrail Modal */}
+      <Modal
+        isOpen={!!viewingGuardrail}
+        onClose={() => setViewingGuardrail(null)}
+        title="Guardrail Details"
+        maxWidth="max-w-xl"
+      >
+        {viewingGuardrail && (
+          <div className="flex flex-col gap-5">
+            <div>
+              <h3 className="text-sm font-semibold text-primary-text mb-1">Type</h3>
+              <p className="text-sm text-secondary-text">{viewingGuardrail.type}</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-primary-text mb-1">Instructions</h3>
+              <div className="p-4 bg-secondary-bg border border-border-color rounded-lg text-sm text-secondary-text whitespace-pre-wrap font-mono">
+                {viewingGuardrail.instructions}
+              </div>
+            </div>
+            <div className="flex gap-6">
+              <div>
+                <h3 className="text-sm font-semibold text-primary-text mb-1">Enforcement</h3>
+                <Badge variant="outline" className="capitalize mt-1">{viewingGuardrail.enforcement}</Badge>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-primary-text mb-1">Status</h3>
+                <div className="mt-1">
+                  <Badge variant={viewingGuardrail.enabled ? "success" : "outline"}>
+                    {viewingGuardrail.enabled ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end mt-2 pt-4 border-t border-border-color">
+              <Button variant="secondary" onClick={() => setViewingGuardrail(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* View Tool Modal */}
+      <Modal
+        isOpen={!!viewingTool}
+        onClose={() => setViewingTool(null)}
+        title="Tool Details"
+        maxWidth="max-w-xl"
+      >
+        {viewingTool && (
+          <div className="flex flex-col gap-5">
+            <div>
+              <h3 className="text-sm font-semibold text-primary-text mb-1">Tool ID</h3>
+              <p className="text-sm text-secondary-text">{viewingTool.tool_id || viewingTool.id}</p>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-primary-text mb-1">Usage Instructions</h3>
+              <div className="p-4 bg-secondary-bg border border-border-color rounded-lg text-sm text-secondary-text whitespace-pre-wrap font-mono">
+                {viewingTool.usage_instructions || <span className="italic opacity-50">No usage instructions provided.</span>}
+              </div>
+            </div>
+            <div className="flex gap-6">
+              <div>
+                <h3 className="text-sm font-semibold text-primary-text mb-1">Credential Requirement</h3>
+                <Badge variant="outline" className="capitalize mt-1">
+                  {(viewingTool.credential_id || viewingTool.credential) === 'none' ? 'No Credential' : 'API Key / Token Required'}
+                </Badge>
+              </div>
+            </div>
+            <div className="flex items-center justify-end mt-2 pt-4 border-t border-border-color">
+              <Button variant="secondary" onClick={() => setViewingTool(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Disable/Enable Confirmation Modal */}

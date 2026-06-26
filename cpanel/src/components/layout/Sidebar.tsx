@@ -1,8 +1,8 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, 
   MessageSquare, 
@@ -26,31 +26,28 @@ const navItems = [
 import { SettingsSidebar } from './SettingsSidebar';
 import { useAppStore } from '@/store/useAppStore';
 import { useOrganizationHooks } from '@/hooks/api/useOrganization';
+import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { activeOrganizationId } = useAppStore();
-  const { useOrganizationsQuery } = useOrganizationHooks();
-  const { data: organizations } = useOrganizationsQuery();
-
-  const activeOrg = Array.isArray(organizations) 
-    ? organizations.find((org: any) => org.id === activeOrganizationId) 
-    : undefined;
-  const companyName = activeOrg ? activeOrg.name : 'Enterprise GPT';
+  const router = useRouter();
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
   if (pathname.startsWith('/settings')) {
     return <SettingsSidebar />;
   }
 
   return (
-    <aside className="w-[220px] h-screen bg-secondary-bg backdrop-blur-2xl backdrop-saturate-[180%] shadow-[4px_0_24px_rgba(0,0,0,0.02)] border-r border-border-color flex flex-col fixed top-0 left-0 z-40 overflow-hidden">
-      <div className="h-[64px] border-b border-border-color flex items-center px-4 shrink-0">
+    <>
+      <aside className="w-[220px] h-screen bg-secondary-bg backdrop-blur-2xl backdrop-saturate-[180%] shadow-[4px_0_24px_rgba(0,0,0,0.02)] border-r border-border-color flex flex-col fixed top-0 left-0 z-40 overflow-hidden">
+        <div className="h-[64px] border-b border-border-color flex items-center px-4 shrink-0">
         <div className="flex items-center gap-4 min-w-[200px]">
           <div className="text-accent-primary shrink-0 flex items-center justify-center">
             <Bot size={20} />
           </div>
           <div className="flex flex-col opacity-100">
-            <h2 className="m-0 text-[13px] font-bold tracking-tight text-primary-text truncate uppercase">{companyName}</h2>
+            <h2 className="m-0 text-[13px] font-bold tracking-tight text-primary-text truncate uppercase">EnterpriseIQ AI</h2>
           </div>
         </div>
       </div>
@@ -101,13 +98,34 @@ export function Sidebar() {
           </div>
           <span className="opacity-100 whitespace-nowrap">Settings</span>
         </Link>
-        <Link href="/login" className="flex items-center gap-4 py-2 px-4 font-medium text-[13px] text-secondary-text transition-colors duration-75 hover:bg-white/20 dark:hover:bg-white/5 hover:text-primary-text border-r-2 border-transparent">
+        <button 
+          onClick={() => setIsLogoutModalOpen(true)}
+          className="cursor-pointer flex items-center gap-4 py-2 px-4 font-medium text-[13px] text-accent-danger transition-colors duration-75 hover:bg-accent-danger/10 border-r-2 border-transparent w-full text-left"
+        >
           <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-[8px]">
             <LogOut size={18} />
           </div>
           <span className="opacity-100 whitespace-nowrap">Logout</span>
-        </Link>
+        </button>
       </div>
-    </aside>
+
+      </aside>
+
+      <Modal
+        isOpen={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        title="Confirm Logout"
+        description="Are you sure you want to log out?"
+      >
+        <div className="flex justify-end gap-3 mt-6">
+          <Button variant="ghost" onClick={() => setIsLogoutModalOpen(false)}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={() => router.push('/login')}>
+            Logout
+          </Button>
+        </div>
+      </Modal>
+    </>
   );
 }
