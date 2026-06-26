@@ -1,3 +1,4 @@
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import update
@@ -9,6 +10,8 @@ from engine.modules.assistant.assistant_models import Assistant
 from engine.modules.assistant.assistant_schemas import AssistantCreate, AssistantUpdate, AssistantStatusUpdate, PreviewPromptRequest, PreviewPromptResponse
 from engine.modules.assistant.runtime.assistant_factory import AssistantFactory
 import tiktoken
+
+logger = logging.getLogger(__name__)
 
 class AssistantService:
     @staticmethod
@@ -73,9 +76,15 @@ class AssistantService:
             
         assistant.updated_at = datetime.utcnow()
         assistant.updated_by = user_id
-        
+        assistant.cache_version = (assistant.cache_version or 1) + 1
+
         await db.commit()
         await db.refresh(assistant)
+
+        logger.info(
+            f"Assistant {assistant_id} updated — cache invalidated "
+            f"(new version: {assistant.cache_version})"
+        )
         return assistant
 
     @staticmethod
@@ -99,9 +108,15 @@ class AssistantService:
         assistant.status = obj_in.status
         assistant.updated_at = datetime.utcnow()
         assistant.updated_by = user_id
-        
+        assistant.cache_version = (assistant.cache_version or 1) + 1
+
         await db.commit()
         await db.refresh(assistant)
+
+        logger.info(
+            f"Assistant {assistant_id} status changed to '{obj_in.status}' — "
+            f"cache invalidated (new version: {assistant.cache_version})"
+        )
         return assistant
 
     @staticmethod

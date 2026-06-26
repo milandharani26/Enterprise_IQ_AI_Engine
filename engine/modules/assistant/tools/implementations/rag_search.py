@@ -144,7 +144,7 @@ class RAGSearchTool(BaseTool):
         )
         self._openai_client = None
         self._db_url: Optional[str] = None
-        self._embedding_model: str = "text-embedding-3-small"
+        self._embedding_model: str = ""  # set during _ensure_initialized from settings
         self._initialized: bool = False
         self._pool: Optional[asyncpg.Pool] = None  # shared pool — async path only
 
@@ -191,10 +191,10 @@ class RAGSearchTool(BaseTool):
                 .lower()
             )
 
-            if embedding_provider not in {"openai", "groq"}:
+            if embedding_provider not in {"openai", "groq", "gemini"}:
                 raise ConfigurationError(
                     f"Unsupported EMBEDDING_PROVIDER '{embedding_provider}' for rag_search. "
-                    "Supported providers: openai, groq.",
+                    "Supported providers: openai, groq, gemini.",
                     context={
                         "operation": "rag_initialize",
                         "embedding_provider": embedding_provider,
@@ -208,13 +208,23 @@ class RAGSearchTool(BaseTool):
                     or ""
                 )
                 base_url = "https://api.groq.com/openai/v1"
-            else:
+                default_model = "nomic-embed-text-v1_5"
+            elif embedding_provider == "gemini":
+                api_key = (
+                    os.getenv("GOOGLE_API_KEY")
+                    or getattr(settings, "google_api_key", "")
+                    or ""
+                )
+                base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+                default_model = "gemini-embedding-2"
+            else:  # openai
                 api_key = (
                     os.getenv("OPENAI_API_KEY")
                     or getattr(settings, "openai_api_key", "")
                     or ""
                 )
                 base_url = None
+                default_model = "text-embedding-3-small"
 
             if not api_key:
                 raise ConfigurationError(
@@ -231,6 +241,13 @@ class RAGSearchTool(BaseTool):
                 )
 
             self._openai_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+
+            # Pick embedding model: settings > env > provider default
+            self._embedding_model = (
+                getattr(settings, "embedding_model", "")
+                or os.getenv("EMBEDDING_MODEL")
+                or default_model
+            )
 
             db_url = getattr(settings, "database_url", "") or ""
             if not db_url:
