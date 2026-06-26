@@ -80,12 +80,7 @@ async def fetch_indexed_document_inventory(
             result = await db.execute(query)
             docs = result.scalars().all()
             
-            # Count total for the message
-            count_query = select(db.scalar(select(Document).where(Document.status == "indexed", Document.deleted_at.is_(None)).with_only_columns(db.func.count())))
-            if org_uuid is not None:
-                count_query = select(db.scalar(select(Document).where(Document.status == "indexed", Document.deleted_at.is_(None), Document.workspace_id == org_uuid).with_only_columns(db.func.count())))
-            
-            # Simple count execution (we use len(docs) if we don't want to run a separate count, but let's just use a simple note)
+            # Count is derived from the fetched docs list (capped at 20)
 
         if not docs:
             if org_uuid is not None:
