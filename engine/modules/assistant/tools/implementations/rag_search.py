@@ -598,12 +598,16 @@ class RAGSearchTool(BaseTool):
         Embed a single query string. Returns 1536-dim float vector.
         """
         try:
+            kwargs = {
+                "model": self._embedding_model,
+                "input": query,
+                "encoding_format": "float",
+            }
+            if "gemini" in self._embedding_model:
+                kwargs["dimensions"] = 768
+                
             response = await asyncio.wait_for(
-                self._openai_client.embeddings.create(
-                    model=self._embedding_model,
-                    input=query,
-                    encoding_format="float",
-                ),
+                self._openai_client.embeddings.create(**kwargs),
                 timeout=30,
             )
             vector = response.data[0].embedding

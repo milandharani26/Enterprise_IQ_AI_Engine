@@ -103,20 +103,42 @@ class DriveSearchTool(BaseTool):
                 or getattr(settings, "default_embedding_provider", "")
                 or "openai"
             ).strip().lower()
-            if embedding_provider not in {"openai", "groq"}:
+            if embedding_provider not in {"openai", "groq", "gemini"}:
                 raise ConfigurationError(
                     f"Unsupported EMBEDDING_PROVIDER '{embedding_provider}' for drive_search. "
-                    "Supported providers: openai, groq.",
-                    context={"operation": "rag_initialize", "embedding_provider": embedding_provider},
+                    "Supported providers: openai, groq, gemini.",
+                    context={
+                        "operation": "rag_initialize",
+                        "embedding_provider": embedding_provider,
+                    },
                 )
 
             # Resolve embedding API key/base URL by provider.
             if embedding_provider == "groq":
-                api_key = os.getenv("GROQ_API_KEY") or getattr(settings, "groq_api_key", "") or ""
+                api_key = (
+                    os.getenv("GROQ_API_KEY")
+                    or getattr(settings, "groq_api_key", "")
+                    or ""
+                )
                 base_url = "https://api.groq.com/openai/v1"
-            else:
-                api_key = os.getenv("OPENAI_API_KEY") or getattr(settings, "openai_api_key", "") or ""
+                default_model = "nomic-embed-text-v1_5"
+            elif embedding_provider == "gemini":
+                api_key = (
+                    os.getenv("GOOGLE_API_KEY")
+                    or getattr(settings, "google_api_key", "")
+                    or ""
+                )
+                base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+                default_model = "gemini-embedding-2"
+            else:  # openai
+                api_key = (
+                    os.getenv("OPENAI_API_KEY")
+                    or getattr(settings, "openai_api_key", "")
+                    or ""
+                )
                 base_url = None
+                default_model = "text-embedding-3-small"
+
             if not api_key:
                 raise ConfigurationError(
                     f"{embedding_provider.upper()} API key not set in settings — required for RAG embedding",
@@ -132,6 +154,13 @@ class DriveSearchTool(BaseTool):
                     context={"operation": "rag_initialize"},
                 )
             self._openai_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+
+            # Pick embedding model: settings > env > provider default
+            self._embedding_model = (
+                getattr(settings, "embedding_model", "")
+                or os.getenv("EMBEDDING_MODEL")
+                or default_model
+            )
 
             # Store sync-compatible DB URL (asyncpg passthrough)
             db_url = getattr(settings, "database_url", "") or ""
@@ -154,12 +183,16 @@ class DriveSearchTool(BaseTool):
 
     async def _embed_query(self, query: str) -> List[float]:
         try:
+            kwargs = {
+                "model": self._embedding_model,
+                "input": query,
+                "encoding_format": "float",
+            }
+            if "gemini" in self._embedding_model:
+                kwargs["dimensions"] = 768
+                
             response = await asyncio.wait_for(
-                self._openai_client.embeddings.create(
-                    model=self._embedding_model,
-                    input=query,
-                    encoding_format="float",
-                ),
+                self._openai_client.embeddings.create(**kwargs),
                 timeout=30,
             )
             return response.data[0].embedding
