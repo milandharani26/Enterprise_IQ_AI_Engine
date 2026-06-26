@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { useDashboardHooks } from '@/hooks/api/useDashboard';
 import { useAppStore } from '@/store/useAppStore';
+import { useOrganizationHooks } from '@/hooks/api/useOrganization';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -24,13 +26,34 @@ const COLORS = ['#5B6AF8', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 export default function Dashboard() {
   const { activeOrganizationId } = useAppStore();
   const { useDashboardMetricsQuery } = useDashboardHooks();
+  const { useOrganizationsQuery } = useOrganizationHooks();
   
   const { data: metrics, isLoading } = useDashboardMetricsQuery(activeOrganizationId);
+  const { data: organizations } = useOrganizationsQuery();
+
+  const activeOrg = Array.isArray(organizations) 
+    ? organizations.find((org: any) => org.id === activeOrganizationId) 
+    : undefined;
+  const companyName = activeOrg ? activeOrg.name : 'EnterpriseIQ AI';
 
   if (isLoading || !metrics) {
     return (
-      <div className="min-h-full p-4 md:p-8 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-accent-primary animate-spin" />
+      <div className="flex flex-col gap-8 h-full">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-96" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-28 w-full rounded-[16px]" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Skeleton className="lg:col-span-2 h-[450px] w-full rounded-[16px]" />
+          <Skeleton className="lg:col-span-1 h-[450px] w-full rounded-[16px]" />
+        </div>
       </div>
     );
   }
@@ -38,15 +61,13 @@ export default function Dashboard() {
   const isDegraded = metrics.system_health === "Degraded";
 
   return (
-    <div className="min-h-full p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
+    <div className="flex flex-col gap-8 h-full">
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-gray-200 dark:border-white/10 pb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold text-gray-900 dark:text-white tracking-tight">Dashboard</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
-              System overview and real-time metrics for Enterprise IQ.
+            <h1 className="m-0 text-2xl font-bold text-primary-text tracking-tight">Dashboard</h1>
+            <p className="m-0 mt-1 text-sm text-secondary-text">
+              System overview and real-time metrics for {companyName}.
             </p>
           </div>
         </div>
@@ -227,7 +248,6 @@ export default function Dashboard() {
           </div>
 
         </div>
-      </div>
     </div>
   );
 }

@@ -245,8 +245,19 @@ async def exchange_google_oauth_code(
         await asyncio.to_thread(flow.fetch_token, code=req.code)
         credentials = flow.credentials
 
+        # Fetch the user's email address from Google Drive
+        user_email = None
+        try:
+            from googleapiclient.discovery import build
+            service = build('drive', 'v3', credentials=credentials)
+            about_info = await asyncio.to_thread(service.about().get(fields="user").execute)
+            user_email = about_info.get("user", {}).get("emailAddress")
+        except Exception as e:
+            logger.warning(f"Could not fetch user email during Google OAuth: {e}")
+
         # Store all tokens in auth_data
         cred.auth_data = {
+            "email": user_email,
             "client_id": client_id,
             "client_secret": client_secret,
             "redirect_uri": redirect_uri,

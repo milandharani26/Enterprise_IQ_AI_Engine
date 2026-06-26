@@ -27,6 +27,7 @@ class CredentialResponse(CredentialBase):
     created_at: datetime
     updated_at: datetime
     last_used_at: Optional[datetime] = None
+    display_info: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True

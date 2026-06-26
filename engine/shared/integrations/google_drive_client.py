@@ -66,7 +66,7 @@ class GoogleDriveClient:
 
         self.service = build('drive', 'v3', credentials=self.creds)
 
-    def list_files(self, query: str = None, page_size: int = 50) -> List[Dict[str, Any]]:
+    def list_files(self, query: str = None, page_size: int = 50, fetch_all: bool = False) -> List[Dict[str, Any]]:
         """
         List files matching the query.
         Example query: "mimeType='application/pdf'" or "'root' in parents"
@@ -86,15 +86,28 @@ class GoogleDriveClient:
                     "mimeType != 'application/vnd.google-apps.map'"
                 )
 
-            results = self.service.files().list(
-                q=query,
-                pageSize=page_size,
-                fields=fields,
-                spaces='drive'
-            ).execute()
+            all_files = []
+            page_token = None
             
-            files = results.get('files', [])
-            return files
+            while True:
+                results = self.service.files().list(
+                    q=query,
+                    pageSize=page_size,
+                    fields=fields,
+                    spaces='drive',
+                    pageToken=page_token,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True
+                ).execute()
+                
+                files = results.get('files', [])
+                all_files.extend(files)
+                
+                page_token = results.get('nextPageToken')
+                if not fetch_all or not page_token:
+                    break
+                    
+            return all_files
         except Exception as e:
             logger.error(f"Failed to list Google Drive files: {e}")
             raise

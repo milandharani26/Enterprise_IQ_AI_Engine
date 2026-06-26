@@ -6,11 +6,15 @@ import {
   Database,
   ChevronDown,
   X,
-  Plus
+  Plus,
+  Search,
+  Filter
 } from 'lucide-react';
+import { Input } from '@/components/ui/Input';
 import { useConnectorsHooks, Connector } from '@/hooks/api/useConnectors';
 import { useCredentialsHooks, Credential } from '@/hooks/api/useCredentials';
 import { useAppStore } from '@/store/useAppStore';
+import { Skeleton } from '@/components/ui/Skeleton';
 import toast from 'react-hot-toast';
 
 interface UIMetaDef {
@@ -46,14 +50,28 @@ export default function ConnectorPage() {
 
   // Clear local syncing state if the real DB status has caught up and shows 'syncing' or 'synced' or 'failed'
   useEffect(() => {
-    if (dbConnectors) {
-      setLocalSyncingIds(prev => prev.filter(id => {
-        const conn = dbConnectors.find((c: Connector) => c.id === id);
-        // Keep in local state only if the DB still hasn't registered it as syncing, synced, or failed
-        return conn && conn.sync_status !== 'syncing' && conn.sync_status !== 'synced' && conn.sync_status !== 'failed';
-      }));
+    if (localSyncingIds.length === 0) return;
+
+    const newIds = localSyncingIds.filter(id => {
+      const conn = dbConnectors.find((c: Connector) => c.id === id);
+      // Keep in local state only if the DB still hasn't registered it as syncing, synced, or failed
+      return conn && conn.sync_status !== 'syncing' && conn.sync_status !== 'synced' && conn.sync_status !== 'failed';
+    });
+
+    if (newIds.length !== localSyncingIds.length) {
+      setLocalSyncingIds(newIds);
     }
-  }, [dbConnectors]);
+  }, [dbConnectors, localSyncingIds]);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+
+  const filteredConnectors = dbConnectors.filter((c: Connector) => {
+    const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          c.connector_id.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = filterStatus === 'all' || c.status === filterStatus;
+    return matchesSearch && matchesType;
+  });
 
   // Sync static Connectors to DB if they don't exist
   useEffect(() => {
@@ -122,33 +140,47 @@ export default function ConnectorPage() {
     : [];
 
   const getColorClasses = (colorBase: string) => {
-    const map: Record<string, any> = {
-      blue: { bg: 'bg-blue-500/10 dark:bg-blue-500/20', text: 'text-blue-600 dark:text-blue-400', shadow: 'shadow-blue-500/20', border: 'border-blue-500/20', cardBorder: 'border-blue-500/30 dark:border-blue-500/20' },
-      indigo: { bg: 'bg-indigo-500/10 dark:bg-indigo-500/20', text: 'text-indigo-600 dark:text-indigo-400', shadow: 'shadow-indigo-500/20', border: 'border-indigo-500/20', cardBorder: 'border-indigo-500/30 dark:border-indigo-500/20' },
+    return { 
+      bg: 'bg-accent-primary/10', 
+      text: 'text-accent-primary', 
+      shadow: 'shadow-[0_0_20px_rgba(91,106,248,0.15)]', 
+      border: 'border-accent-primary/20', 
+      cardBorder: 'border-accent-primary/20' 
     };
-    return map[colorBase] || map.blue;
   };
 
   return (
-    <div className="min-h-full p-4 md:p-8 lg:p-12 relative">
-      <div className="mb-10 max-w-6xl mx-auto">
-        <h1 className="text-4xl font-extrabold tracking-tight mb-2 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">
-          Connectors
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 text-lg max-w-2xl leading-relaxed">
-          Enable connectors and bind them to credentials.
-        </p>
+    <div className="flex flex-col gap-8 h-full">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="m-0 text-2xl font-bold text-primary-text tracking-tight">Connectors</h1>
+          <p className="m-0 mt-1 text-sm text-secondary-text">Enable connectors and bind them to credentials.</p>
+        </div>
+      </div>
 
-        <div className="flex items-center gap-2 mt-8">
-          <button
-            onClick={() => setActiveTab('connectors')}
-            className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all duration-300 ${activeTab === 'connectors'
-              ? 'bg-black dark:bg-white text-white dark:text-gray-900 shadow-xl shadow-black/10 dark:shadow-white/10 scale-105'
-              : 'bg-black/5 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-black/10 dark:hover:bg-white/10'
-              }`}
-          >
-            Connectors
-          </button>
+      {/* Filters & Search */}
+      <div className="flex flex-col sm:flex-row items-center gap-4 bg-secondary-bg p-2 rounded-xl border border-border-color">
+        <div className="flex-1 w-full relative">
+          <Input
+            placeholder="Search connectors by name or ID..."
+            icon={<Search size={18} />}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-transparent border-none shadow-none focus:ring-0"
+          />
+        </div>
+        <div className="h-8 w-px bg-border-color hidden sm:block" />
+        <div className="flex items-center gap-2 pr-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-secondary-text">
+            <Filter size={16} />
+            Filters
+          </div>
+          <div className="flex bg-tertiary-bg p-1 rounded-lg">
+            <button onClick={() => setFilterStatus('all')} className={`cursor-pointer border-none px-3 py-1.5 text-xs font-medium transition-all rounded-md ${filterStatus === 'all' ? 'bg-card-bg shadow-sm text-primary-text' : 'text-secondary-text hover:text-primary-text bg-transparent'}`}>All</button>
+            <button onClick={() => setFilterStatus('enabled')} className={`cursor-pointer border-none px-3 py-1.5 text-xs font-medium transition-all rounded-md ${filterStatus === 'enabled' ? 'bg-card-bg shadow-sm text-primary-text' : 'text-secondary-text hover:text-primary-text bg-transparent'}`}>Enabled</button>
+            <button onClick={() => setFilterStatus('disabled')} className={`cursor-pointer border-none px-3 py-1.5 text-xs font-medium transition-all rounded-md ${filterStatus === 'disabled' ? 'bg-card-bg shadow-sm text-primary-text' : 'text-secondary-text hover:text-primary-text bg-transparent'}`}>Disabled</button>
+          </div>
         </div>
       </div>
 
@@ -156,9 +188,32 @@ export default function ConnectorPage() {
         <div className="text-center p-8 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 rounded-xl">
           Please select an Organization first.
         </div>
+      ) : isLoadingConnectors ? (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="flex flex-col bg-card-bg border border-border-color rounded-[16px] p-6">
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="w-12 h-12 rounded-[12px]" />
+                  <div>
+                    <Skeleton className="h-5 w-24 mb-1" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                </div>
+                <Skeleton className="w-12 h-6 rounded-full" />
+              </div>
+              <Skeleton className="h-4 w-full mb-2" />
+              <Skeleton className="h-4 w-3/4 mb-6" />
+              <div className="mt-auto pt-6 border-t border-border-color flex justify-between">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : activeTab === 'connectors' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {dbConnectors.map((connector: Connector) => {
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
+          {filteredConnectors.map((connector: Connector, idx: number) => {
             const meta = UI_META[connector.connector_id] || UI_META['google_drive'];
             const colors = getColorClasses(meta.colorBase);
             const Icon = meta.icon;
@@ -168,25 +223,23 @@ export default function ConnectorPage() {
             return (
               <div
                 key={connector.id}
-                className={`group relative p-6 rounded-3xl bg-white/50 dark:bg-[#111113]/50 backdrop-blur-xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${isEnabled
-                  ? `${colors.cardBorder} shadow-lg ${colors.shadow}`
-                  : 'border-black/10 dark:border-white/10 hover:border-black/20 dark:hover:border-white/20'
-                  }`}
+                className={`group relative flex flex-col bg-card-bg backdrop-blur-2xl backdrop-saturate-[180%] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-border-color rounded-[16px] p-6 transition-all duration-300 hover:border-border-hover hover:bg-card-hover hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)] hover:-translate-y-1 animate-cascade-item`}
+                style={{ animationDelay: `${idx * 80}ms` }}
               >
                 <div className="flex items-start justify-between mb-6">
                   <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${colors.bg} ${colors.text} ${colors.border}`}>
+                    <div className={`w-12 h-12 rounded-[12px] bg-accent-primary/10 backdrop-blur-md flex items-center justify-center text-accent-primary border border-accent-primary/20 shadow-[0_0_20px_rgba(91,106,248,0.15)] transition-all duration-300 group-hover:bg-accent-primary/20 group-hover:scale-105 group-hover:shadow-[0_0_25px_rgba(91,106,248,0.25)]`}>
                       <Icon className="w-6 h-6" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white text-lg">{connector.name}</h3>
-                      <p className="text-gray-500 dark:text-gray-400 text-sm font-mono">{connector.connector_id}</p>
+                      <h3 className="m-0 text-[18px] font-bold text-primary-text tracking-tight group-hover:text-accent-primary transition-colors">{connector.name}</h3>
+                      <p className="m-0 mt-1 text-[11px] font-mono text-accent-primary/80 uppercase tracking-wider">{connector.connector_id}</p>
                     </div>
                   </div>
 
                   <button
                     onClick={() => handleToggle(connector)}
-                    className={`relative w-12 h-6 rounded-full transition-colors duration-300 shrink-0 ${isEnabled ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-700'
+                    className={`relative w-12 h-6 rounded-full transition-colors duration-300 shrink-0 ${isEnabled ? 'bg-accent-primary' : 'bg-gray-300 dark:bg-gray-700'
                       }`}
                   >
                     <div className={`absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform duration-300 shadow-sm ${isEnabled ? 'translate-x-6' : 'translate-x-0'
@@ -206,8 +259,12 @@ export default function ConnectorPage() {
                   </span>
                 </div>
 
-                <p className={`text-sm ${isMapped ? 'text-gray-800 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}`}>
-                  {isMapped ? 'Credentials successfully mapped.' : 'No credential mapped yet.'}
+                <p className={`text-sm font-medium ${isMapped ? 'text-gray-800 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}`}>
+                  {isMapped ? (
+                    <span className="flex items-center gap-1.5">
+                      Mapped to: <span className="text-accent-primary bg-accent-primary/10 px-2 py-0.5 rounded-md">{credentials.find(c => c.id === connector.credential_id)?.name || 'Unknown Credential'}</span>
+                    </span>
+                  ) : 'No credential mapped yet.'}
                 </p>
 
                 {connector.status === 'enabled' && (
