@@ -26,3 +26,15 @@ class Credential(Base):
         onupdate=func.now(),
     )
     last_used_at = Column(DateTime, nullable=True)
+
+    @property
+    def display_info(self):
+        info = {}
+        if self.auth_data:
+            if "email" in self.auth_data:
+                info["email"] = self.auth_data["email"]
+            if "host" in self.auth_data:
+                info["host"] = self.auth_data["host"]
+            if "username" in self.auth_data:
+                info["username"] = self.auth_data["username"]
+        return info

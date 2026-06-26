@@ -243,8 +243,13 @@ export default function CredentialsPage() {
                       {paginatedCredentials.map((cred: Credential) => (
                         <tr key={cred.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
                           <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-col">
                               <span className="font-medium text-gray-900 dark:text-white">{cred.name}</span>
+                              {cred.display_info?.email ? (
+                                <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{cred.display_info.email}</span>
+                              ) : cred.display_info?.host ? (
+                                <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{cred.display_info.username}@{cred.display_info.host}</span>
+                              ) : null}
                             </div>
                           </td>
                           <td className="px-5 py-3.5">

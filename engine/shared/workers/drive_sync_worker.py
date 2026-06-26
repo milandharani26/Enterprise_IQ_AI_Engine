@@ -24,9 +24,8 @@ async def _sync_drive_for_workspace(session, connector: Connector, credential: C
         client = GoogleDriveClient(auth_data=credential.auth_data)
         
         # We look for files modified in the last 10 minutes to cover our polling interval
-        # In a robust system, we would track the last_sync_time per workspace.
-        # For testing, remove the 10-minute threshold so we get all files
-        query = "mimeType != 'application/vnd.google-apps.folder'"
+        # For robust deletion detection, we fetch all valid files
+        query = "trashed = false and mimeType != 'application/vnd.google-apps.folder'"
         
         # Add standard filter to exclude unsupported
         query += (
@@ -36,7 +35,7 @@ async def _sync_drive_for_workspace(session, connector: Connector, credential: C
             " and mimeType != 'application/vnd.google-apps.map'"
         )
 
-        files = client.list_files(query=query)
+        files = client.list_files(query=query, fetch_all=True)
         if not files:
             connector.sync_status = "synced"
             from sqlalchemy import func
@@ -47,8 +46,32 @@ async def _sync_drive_for_workspace(session, connector: Connector, credential: C
         logger.info(f"Drive Sync: Found {len(files)} updated files for workspace {connector.organization_id}")
         
         service = DriveDocumentService(session)
+        current_drive_ids = set()
         for file in files:
+            file_id = file.get("id")
+            if file_id:
+                current_drive_ids.add(file_id)
             await ingest_drive_file(file, connector.organization_id, client, service)
+            
+        # Detect and delete orphaned files (deleted in Drive)
+        from engine.shared.models.drive_document_model import DriveDocument
+        db_docs_result = await session.execute(
+            select(DriveDocument.drive_file_id)
+            .where(DriveDocument.workspace_id == connector.organization_id)
+        )
+        db_drive_ids = {row[0] for row in db_docs_result.all() if row[0]}
+        
+        deleted_drive_ids = db_drive_ids - current_drive_ids
+        if deleted_drive_ids:
+            logger.info(f"Drive Sync: Deleting {len(deleted_drive_ids)} orphaned files for workspace {connector.organization_id}")
+            await service.delete_by_drive_file_ids(connector.organization_id, list(deleted_drive_ids))
+            
+            # Invalidate semantic cache if applicable
+            try:
+                from engine.modules.assistant.semantic_cache import SemanticCacheService
+                await SemanticCacheService.invalidate_workspace_cache(session, connector.organization_id)
+            except ImportError:
+                pass
             
         connector.sync_status = "synced"
         from sqlalchemy import func
