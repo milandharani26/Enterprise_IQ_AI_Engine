@@ -217,6 +217,7 @@ class SqlQueryTool(BaseTool):
                     schema_context,
                     db_type,
                     guardrails,
+                    conversation_history=ctx.conversation_history if ctx else None,
                 )
 
                 logger.info("=" * 50)

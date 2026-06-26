@@ -118,11 +118,24 @@ class SimpleReactiveType:
         )
         return agent, system_instruction, langchain_tools
 
-    async def invoke(self, agent, query: str, session_id: str):
-        # FIX: removed configurable thread_id — create_react_agent without a
-        # checkpointer doesn't support memory/threads. Passing thread_id caused
-        # a silent config error on some LangGraph versions. Add a MemorySaver
-        # checkpointer here if you need per-session memory.
-        return await agent.ainvoke(
-            {"messages": [HumanMessage(content=query)]},
-        )
+    async def invoke(self, agent, query: str, session_id: str, conversation_history: list = None):
+        from langchain_core.messages import AIMessage
+
+        # Build message list with full conversation history so the agent
+        # has context of previous turns (e.g. "I am Priyank Godhani" → "do you know my name?")
+        messages = []
+        if conversation_history:
+            for msg in conversation_history:
+                role = msg.get("role", "")
+                content = (msg.get("content") or "").strip()
+                if not content:
+                    continue
+                if role == "user":
+                    messages.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    messages.append(AIMessage(content=content))
+
+        # Always append the current user message
+        messages.append(HumanMessage(content=query))
+
+        return await agent.ainvoke({"messages": messages})
