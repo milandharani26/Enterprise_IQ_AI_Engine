@@ -259,8 +259,12 @@ export default function ConnectorPage() {
                   </span>
                 </div>
 
-                <p className={`text-sm ${isMapped ? 'text-gray-800 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}`}>
-                  {isMapped ? 'Credentials successfully mapped.' : 'No credential mapped yet.'}
+                <p className={`text-sm font-medium ${isMapped ? 'text-gray-800 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}`}>
+                  {isMapped ? (
+                    <span className="flex items-center gap-1.5">
+                      Mapped to: <span className="text-accent-primary bg-accent-primary/10 px-2 py-0.5 rounded-md">{credentials.find(c => c.id === connector.credential_id)?.name || 'Unknown Credential'}</span>
+                    </span>
+                  ) : 'No credential mapped yet.'}
                 </p>
 
                 {connector.status === 'enabled' && (

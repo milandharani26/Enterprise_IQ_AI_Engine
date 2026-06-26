@@ -13,6 +13,11 @@ export interface Credential {
   created_at: string;
   updated_at: string;
   last_used_at: string | null;
+  display_info?: {
+    email?: string;
+    host?: string;
+    username?: string;
+  };
 }
 
 export const useCredentialsHooks = () => {

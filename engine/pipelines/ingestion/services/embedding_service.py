@@ -34,24 +34,28 @@ class EmbeddingService:
             or "openai"
         )
         self.provider = raw_provider.strip().lower()
-        if self.provider not in {"openai", "groq"}:
+        if self.provider not in {"openai", "groq", "gemini"}:
             raise EmbeddingError(
                 f"Unsupported EMBEDDING_PROVIDER '{self.provider}'. "
-                "Supported providers: openai, groq."
+                "Supported providers: openai, groq, gemini."
             )
         self._api_key = (
             (os.getenv("GROQ_API_KEY") or getattr(s, "groq_api_key", "") or "")
             if self.provider == "groq"
+            else (os.getenv("GOOGLE_API_KEY") or getattr(s, "google_api_key", "") or "")
+            if self.provider == "gemini"
             else (os.getenv("OPENAI_API_KEY") or getattr(s, "openai_api_key", "") or "")
         )
         self._base_url = (
             "https://api.groq.com/openai/v1"
             if self.provider == "groq"
+            else "https://generativelanguage.googleapis.com/v1beta/openai/"
+            if self.provider == "gemini"
             else None
         )
-        self.model = os.getenv("EMBEDDING_MODEL") or "text-embedding-3-small"
+        self.model = os.getenv("EMBEDDING_MODEL") or ("gemini-embedding-2" if self.provider == "gemini" else "text-embedding-3-small")
         self.batch_size = getattr(s, "embedding_batch_size", 100)
-        self.max_retries = getattr(s, "embedding_max_retries", 3)
+        self.max_retries = getattr(s, "embedding_max_retries", 10)
         self.timeout = getattr(s, "embedding_timeout_seconds", 120)
         self._client = None
 
@@ -103,12 +107,16 @@ class EmbeddingService:
         client = self._get_client()
         for attempt in range(1, self.max_retries + 1):
             try:
+                kwargs = {
+                    "model": self.model,
+                    "input": texts,
+                    "encoding_format": "float",
+                }
+                if self.provider == "gemini":
+                    kwargs["dimensions"] = 768
+                    
                 resp = await asyncio.wait_for(
-                    client.embeddings.create(
-                        model=self.model,
-                        input=texts,
-                        encoding_format="float",
-                    ),
+                    client.embeddings.create(**kwargs),
                     timeout=self.timeout,
                 )
                 return [item.embedding for item in resp.data]
@@ -123,7 +131,7 @@ class EmbeddingService:
                     logger.warning("Rate limited (attempt %s)", attempt)
                     if attempt == self.max_retries:
                         raise EmbeddingError(f"Rate limited after {self.max_retries} attempts") from e
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(35)
                 elif "400" in str(e) or "invalid" in err_str:
                     raise EmbeddingError(f"Invalid request: {e}") from e
                 else:
