@@ -23,6 +23,9 @@ class ToolContext(BaseModel):
     created_by: Optional[str] = None
     attachment_ids: Optional[List[str]] = None
     guardrails: Optional[str] = None
+    conversation_history: Optional[List[dict]] = (
+        None  # Recent messages for SQL context memory
+    )
 
 
 class ToolProperties(BaseModel):
@@ -74,6 +77,7 @@ class BaseTool:
                 result = await self._arun(ctx=ctx, **kwargs)
             except NotImplementedError:
                 import asyncio
+
                 result = await asyncio.to_thread(self._run, ctx=ctx, **kwargs)
             return result if isinstance(result, str) else str(result)
 
