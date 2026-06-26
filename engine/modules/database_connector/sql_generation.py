@@ -22,7 +22,6 @@ def _extract_text(content) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        # Concatenate all text blocks in order
         parts = []
         for block in content:
             if isinstance(block, dict) and block.get("type") == "text":
@@ -30,17 +29,14 @@ def _extract_text(content) -> str:
             elif isinstance(block, str):
                 parts.append(block)
         return "".join(parts)
-    # Fallback: coerce to string
     return str(content)
 
 
 class SqlGenerationService:
     def __init__(self, llm_config: Optional[Dict[str, Any]] = None):
-        # We enforce a slightly longer max_tokens for SQL generation
         if llm_config is None:
             llm_config = {}
         llm_config.setdefault("max_tokens", 1024)
-
         self.llm = initialize_llm(llm_config)
 
     async def pre_generate_guardrail_check(
@@ -49,7 +45,6 @@ class SqlGenerationService:
         """
         Fast pass to check if the question violates the assistant's specific guardrails
         before we even attempt to write SQL.
-        This check is deterministic, saves tokens, and avoids false positives.
         """
         if not guardrails or not guardrails.strip():
             return True
@@ -72,62 +67,14 @@ class SqlGenerationService:
             return False
 
         stopwords = {
-            "do",
-            "not",
-            "give",
-            "any",
-            "information",
-            "about",
-            "table",
-            "database",
-            "show",
-            "disclose",
-            "list",
-            "view",
-            "get",
-            "retrieve",
-            "select",
-            "a",
-            "an",
-            "the",
-            "of",
-            "in",
-            "on",
-            "with",
-            "from",
-            "to",
-            "for",
-            "please",
-            "strict",
-            "block",
-            "rule",
-            "rules",
-            "must",
-            "adhere",
-            "strictly",
-            "should",
-            "only",
-            "never",
-            "cannot",
-            "can",
-            "could",
-            "would",
-            "will",
-            "no",
-            "yes",
-            "details",
-            "detail",
-            "data",
-            "record",
-            "records",
-            "row",
-            "rows",
-            "column",
-            "columns",
-            "field",
-            "fields",
-            "value",
-            "values",
+            "do", "not", "give", "any", "information", "about", "table",
+            "database", "show", "disclose", "list", "view", "get", "retrieve",
+            "select", "a", "an", "the", "of", "in", "on", "with", "from",
+            "to", "for", "please", "strict", "block", "rule", "rules", "must",
+            "adhere", "strictly", "should", "only", "never", "cannot", "can",
+            "could", "would", "will", "no", "yes", "details", "detail", "data",
+            "record", "records", "row", "rows", "column", "columns", "field",
+            "fields", "value", "values",
         }
 
         lines = guardrails.split("\n")
@@ -135,23 +82,19 @@ class SqlGenerationService:
             line = line.strip()
             if not line:
                 continue
-
             clean_line = re.sub(r"^[-*#\s\d\.]+", "", line)
             clean_line = re.sub(r"^\[.*?\]\s*", "", clean_line)
             clean_line = re.sub(r"^\(.*?\)\s*:\s*", "", clean_line)
             clean_line = re.sub(r"^:\s*", "", clean_line)
-
             words = re.sub(r"[^a-z0-9\s]", " ", clean_line.lower()).split()
             keywords = [w for w in words if w not in stopwords and len(w) > 1]
-
             if not keywords:
                 continue
-
             for kw in keywords:
                 for qw in question_words:
                     if matches_keyword(qw, kw):
                         logger.warning(
-                            f"Guardrail violation detected (deterministic match on keyword '{kw}'): "
+                            f"Guardrail violation detected (keyword '{kw}'): "
                             f"rule='{line}', question='{question}'"
                         )
                         return False
@@ -167,36 +110,105 @@ class SqlGenerationService:
         conversation_history: Optional[list] = None,
     ) -> str:
         """
-        Generates the SQL query based on the database schema and question, enforcing guardrails.
-        conversation_history is a list of {"role": "user"/"assistant", "content": "..."} dicts
-        representing recent turns — used so the LLM can resolve follow-up questions like
-        "whose details is this?" by referencing what was discussed before.
+        Generates an accurate SQL query from a natural language question.
+        conversation_history provides recent turns so the LLM can resolve
+        follow-up references like 'whose details is this?' or 'my role'.
         """
+
         system_instructions = (
-            "You are an expert SQL Data Analyst. Your job is to write a syntactically correct "
-            "{database_type} query to answer the user's question.\n"
-            "Use ONLY the tables and columns provided in the schema context below.\n\n"
+            "You are an expert {database_type} SQL query writer.\n"
+            "Your ONLY job is to output a single, correct, read-only SQL SELECT query.\n"
+            "Use ONLY the tables, columns, and relationships provided in the SCHEMA CONTEXT below.\n\n"
+
+            # ----------------------------------------------------------------
+            # SCHEMA
+            # ----------------------------------------------------------------
             "SCHEMA CONTEXT:\n{schema_context}\n\n"
         )
 
         if guardrails:
             system_instructions += (
-                "CRITICAL SECURITY GUARDRAILS:\n"
-                "You must strictly follow these rules. If the user's question asks for data "
-                "prohibited by these rules, you MUST output the exact string: "
-                "'GUARDRAIL_VIOLATION' instead of a SQL query.\n"
+                "SECURITY GUARDRAILS:\n"
+                "If the question asks for data that violates any rule below, "
+                "output the exact string GUARDRAIL_VIOLATION and nothing else.\n"
                 "{guardrails}\n\n"
             )
 
         system_instructions += (
-            "RULES:\n"
-            "1. Output ONLY the raw SQL query without any markdown formatting, backticks, or explanations.\n"
-            "2. Ensure the query is read-only (SELECT only).\n"
-            "3. Limit the results to 100 rows maximum if no specific limit is requested.\n"
-            '4. ALWAYS use double quotes around ALL table and column names (e.g., "createdAt") to preserve case sensitivity.\n'
+            # ----------------------------------------------------------------
+            # CORE OUTPUT RULES
+            # ----------------------------------------------------------------
+            "OUTPUT RULES:\n"
+            "1. Output ONLY the raw SQL query — no markdown, no backticks, no explanation.\n"
+            "2. SELECT only — never INSERT, UPDATE, DELETE, DROP, or TRUNCATE.\n"
+            "3. Default LIMIT 100 unless the user specifies a different number.\n"
+            "4. ALWAYS double-quote every table and column name to preserve case: \"full_name\", \"createdAt\".\n"
+            "5. ALWAYS prefix tables with their schema: \"public\".\"users\", not just \"users\".\n\n"
+
+            # ----------------------------------------------------------------
+            # TEXT & NAME MATCHING
+            # ----------------------------------------------------------------
+            "TEXT SEARCH RULES:\n"
+            "6. NEVER use exact equality (=) for name or text searches.\n"
+            "   Always use case-insensitive search:\n"
+            "   CORRECT:  WHERE LOWER(\"full_name\") LIKE LOWER('%Priyank%')\n"
+            "   WRONG:    WHERE \"full_name\" = 'Priyank'\n"
+            "7. If the user gives a full name (e.g. 'Priyank Godhani'), split and match each word:\n"
+            "   WHERE LOWER(\"full_name\") LIKE '%priyank%' AND LOWER(\"full_name\") LIKE '%godhani%'\n"
+            "8. If multiple name-like columns exist (full_name, first_name, last_name, user_name),\n"
+            "   search ALL of them with OR:\n"
+            "   WHERE LOWER(\"full_name\") LIKE '%value%'\n"
+            "      OR LOWER(\"first_name\") LIKE '%value%'\n"
+            "      OR LOWER(\"last_name\") LIKE '%value%'\n\n"
+
+            # ----------------------------------------------------------------
+            # COLUMN MAPPING
+            # ----------------------------------------------------------------
+            "COLUMN MAPPING RULES:\n"
+            "9. NEVER assume column names — use ONLY what is in the schema context.\n"
+            "10. Common user terms map to these column patterns (verify against schema first):\n"
+            "    'name'     → full_name, user_name, first_name, last_name, name\n"
+            "    'email'    → email, email_address, user_email\n"
+            "    'role'     → role_name, role_id, user_role\n"
+            "    'status'   → is_active, status, account_status\n"
+            "    'date'     → created_at, createdAt, updated_at, date_of_birth\n"
+            "    'phone'    → phone, phone_number, mobile\n"
+            "11. If you cannot find a matching column in the schema, do NOT guess.\n"
+            "    Instead output: SELECT 'COLUMN_NOT_FOUND' AS error\n\n"
+
+            # ----------------------------------------------------------------
+            # JOIN RULES
+            # ----------------------------------------------------------------
+            "JOIN RULES:\n"
+            "12. If the answer requires data from multiple tables, always JOIN them.\n"
+            "    Use the relationships in the schema context to find the correct keys.\n"
+            "13. Always use table aliases for clarity in JOINs:\n"
+            "    SELECT u.\"full_name\", r.\"role_name\"\n"
+            "    FROM \"public\".\"users\" u\n"
+            "    JOIN \"public\".\"roles\" r ON u.\"role_id\" = r.\"role_id\"\n"
+            "14. Use LEFT JOIN when the related record might not exist (e.g. a user might have no role).\n"
+            "15. Never use implicit joins (comma-separated tables in FROM). Always use explicit JOIN.\n\n"
+
+            # ----------------------------------------------------------------
+            # NULL & EMPTY HANDLING
+            # ----------------------------------------------------------------
+            "NULL HANDLING RULES:\n"
+            "16. For soft-deleted tables, always filter out deleted rows:\n"
+            "    WHERE \"deletedAt\" IS NULL   (or deleted_at IS NULL)\n"
+            "17. If checking for active records, add: WHERE \"is_active\" = true\n\n"
+
+            # ----------------------------------------------------------------
+            # AGGREGATION
+            # ----------------------------------------------------------------
+            "AGGREGATION RULES:\n"
+            "18. For 'count', 'total', 'how many' questions use COUNT(*) with a clear alias:\n"
+            "    SELECT COUNT(*) AS \"total_users\" FROM \"public\".\"users\"\n"
+            "19. Always add GROUP BY when selecting a non-aggregated column alongside an aggregate.\n\n"
         )
 
-        # Build conversation history block if available
+        # ----------------------------------------------------------------
+        # CONVERSATION HISTORY BLOCK
+        # ----------------------------------------------------------------
         history_block = ""
         if conversation_history:
             logger.info(
@@ -209,24 +221,26 @@ class SqlGenerationService:
                 lines.append(f"{role_label}: {msg.get('content', '').strip()}")
             if lines:
                 history_block = (
-                    "\n\nCONVERSATION HISTORY:\n"
-                    "The following is the recent conversation. Use it to:\n"
-                    "- Extract any names, IDs, or values the user mentioned (e.g. 'I am Priyank Godhani' → use 'Priyank Godhani' as a WHERE filter)\n"
-                    "- Resolve pronouns like 'my', 'their', 'same person', 'whose' by referencing what was said earlier\n"
-                    "- If the user said their name or identity, use it directly as a filter in the SQL WHERE clause\n"
-                    "- NEVER query for placeholder values — always extract real values from this history\n\n"
+                    "CONVERSATION HISTORY:\n"
+                    "Use the exchanges below to resolve references in the current question.\n"
+                    "- If the user stated their name (e.g. 'I am Priyank Godhani') → use it as a WHERE filter\n"
+                    "- Replace 'my', 'their', 'same person', 'whose' with the actual name/value from history\n"
+                    "- If a previous query returned specific names/IDs, use them when the user says 'that person' or 'same one'\n"
+                    "- NEVER use placeholder values like 'current_user' or 'user_id_placeholder'\n\n"
                     + "\n".join(lines)
                     + "\n\n"
-                    "Now use the above context to write the SQL for the CURRENT question below.\n"
+                    "Now write the SQL for the CURRENT question using the above context.\n\n"
                 )
-
         else:
             logger.info(
-                "[SqlGeneration] No conversation history available — generating SQL without context"
+                "[SqlGeneration] No conversation history — generating SQL without context"
             )
 
         prompt = PromptTemplate.from_template(
-            system_instructions + "{history_block}USER QUESTION: {question}\nSQL QUERY:"
+            system_instructions
+            + "{history_block}"
+            + "CURRENT QUESTION: {question}\n"
+            + "SQL QUERY:"
         )
 
         chain = prompt | self.llm
@@ -240,7 +254,6 @@ class SqlGenerationService:
                     "history_block": history_block,
                 }
             )
-            # FIX: use _extract_text() so this works whether content is a str or a list
             return _extract_text(result.content).strip()
         except Exception as e:
             logger.error(f"SQL Generation failed: {e}")

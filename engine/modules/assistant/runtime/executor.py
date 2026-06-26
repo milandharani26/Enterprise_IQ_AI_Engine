@@ -26,9 +26,7 @@ from engine.modules.assistant.runtime.sql_context import (
     enrich_config_for_sql,
 )
 from engine.modules.assistant.tools.base_tool import ToolContext
-from engine.modules.assistant.runtime.conversation_history import (
-    load_recent_conversation_history,
-)
+from engine.modules.assistant.runtime.conversation_history import load_recent_conversation_history
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +82,7 @@ def _extract_response_text(result: dict) -> str:
             text = "\n".join(p for p in parts if p).strip()
         else:
             text = str(content or "").strip()
-
+            
         if text:
             if text.strip().startswith("{"):
                 try:
@@ -92,9 +90,7 @@ def _extract_response_text(result: dict) -> str:
                     if isinstance(parsed, dict) and parsed.get("blocks"):
                         blocks = _normalize_blocks(parsed.get("blocks") or [])
                         for block in blocks:
-                            if block.get("type") == "markdown" and block.get(
-                                "data", {}
-                            ).get("content"):
+                            if block.get("type") == "markdown" and block.get("data", {}).get("content"):
                                 return _fix_markdown_links(block["data"]["content"])
                 except (json.JSONDecodeError, TypeError):
                     pass
@@ -110,13 +106,11 @@ def _extract_response_text(result: dict) -> str:
                 parsed = json.loads(msg.content or "")
                 blocks = _normalize_blocks(parsed.get("blocks") or [])
                 for block in blocks:
-                    if block.get("type") == "markdown" and block.get("data", {}).get(
-                        "content"
-                    ):
+                    if block.get("type") == "markdown" and block.get("data", {}).get("content"):
                         return _fix_markdown_links(block["data"]["content"])
             except (json.JSONDecodeError, TypeError):
                 pass
-
+                
     # Also check AIMessage tool_calls in case return_direct stopped execution before ToolMessage was appended
     for msg in reversed(messages):
         if not isinstance(msg, AIMessage):
@@ -127,9 +121,7 @@ def _extract_response_text(result: dict) -> str:
                 args = call.get("args") or {}
                 blocks = _normalize_blocks(args.get("blocks") or [])
                 for block in blocks:
-                    if block.get("type") == "markdown" and block.get("data", {}).get(
-                        "content"
-                    ):
+                    if block.get("type") == "markdown" and block.get("data", {}).get("content"):
                         return _fix_markdown_links(block["data"]["content"])
 
     # 3. FIX: Fallback — read sql_query ToolMessage directly.
@@ -168,12 +160,8 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
                 blocks = _normalize_blocks(parsed.get("blocks") or [])
                 if blocks:
                     for b in blocks:
-                        if b.get("type") == "markdown" and "content" in b.get(
-                            "data", {}
-                        ):
-                            b["data"]["content"] = _fix_markdown_links(
-                                b["data"]["content"]
-                            )
+                        if b.get("type") == "markdown" and "content" in b.get("data", {}):
+                            b["data"]["content"] = _fix_markdown_links(b["data"]["content"])
                     return blocks
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -189,12 +177,8 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
                 blocks = _normalize_blocks(args.get("blocks") or [])
                 if blocks:
                     for b in blocks:
-                        if b.get("type") == "markdown" and "content" in b.get(
-                            "data", {}
-                        ):
-                            b["data"]["content"] = _fix_markdown_links(
-                                b["data"]["content"]
-                            )
+                        if b.get("type") == "markdown" and "content" in b.get("data", {}):
+                            b["data"]["content"] = _fix_markdown_links(b["data"]["content"])
                     return blocks
 
     # 3. JSON blocks embedded in content string.
@@ -206,12 +190,8 @@ def _extract_content_blocks(result: dict, fallback_text: str) -> list:
                 if isinstance(parsed, dict) and parsed.get("blocks"):
                     blocks = _normalize_blocks(parsed["blocks"])
                     for b in blocks:
-                        if b.get("type") == "markdown" and "content" in b.get(
-                            "data", {}
-                        ):
-                            b["data"]["content"] = _fix_markdown_links(
-                                b["data"]["content"]
-                            )
+                        if b.get("type") == "markdown" and "content" in b.get("data", {}):
+                            b["data"]["content"] = _fix_markdown_links(b["data"]["content"])
                     return blocks
             except json.JSONDecodeError:
                 pass
@@ -268,13 +248,18 @@ class AssistantExecutor:
             guardrails=guardrails_str,
         )
 
-        # Load recent conversation history for SQL memory context
-        if assistant_has_sql_tool(config_dict):
-            conversation_history = await load_recent_conversation_history(
-                conversation_id=conversation_id,
-                max_tokens=3000,
-            )
-            context.conversation_history = conversation_history
+        # Load recent conversation history — needed by the agent for multi-turn context
+        # (e.g. user says "I am Priyank" in turn 1, then "do you know my name?" in turn 2)
+        conversation_history = await load_recent_conversation_history(
+            conversation_id=conversation_id,
+            max_tokens=3000,
+        )
+        context.conversation_history = conversation_history
+
+        # Also pass history into SQL generation if SQL tool is present
+        if assistant_has_sql_tool(config_dict) and not conversation_history:
+            # already loaded above — no duplicate load needed
+            pass
 
         if assistant_has_drive_tool(config_dict):
             drive_inventory = await fetch_drive_document_inventory(organization_id)
@@ -290,6 +275,7 @@ class AssistantExecutor:
                 agent,
                 query,
                 session_id,
+                conversation_history=context.conversation_history,
             )
         except Exception as e:
             logger.exception("AGENT INVOCATION FAILED")
