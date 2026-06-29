@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+
 import {
   HardDrive,
   Database,
@@ -9,8 +9,7 @@ import {
   X,
   Plus,
   Search,
-  Filter,
-  Layers
+  Filter
 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { useConnectorsHooks, Connector } from '@/hooks/api/useConnectors';
@@ -33,7 +32,6 @@ const UI_META: Record<string, UIMetaDef> = {
 };
 
 export default function ConnectorPage() {
-  const router = useRouter();
   const { activeOrganizationId } = useAppStore();
   const { useConnectorsQuery, useAddConnectorMutation, useUpdateConnectorMutation, useSyncConnectorMutation } = useConnectorsHooks();
   const { useCredentialsQuery } = useCredentialsHooks();
@@ -294,17 +292,6 @@ export default function ConnectorPage() {
                         {connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id) ? 'Syncing...' : 'Sync Data'}
                       </button>
                     </div>
-
-                    {/* Manage Metadata button — only for DB connectors that have been synced */}
-                    {connector.connector_id !== 'google_drive' && connector.sync_status === 'synced' && (
-                      <button
-                        onClick={() => router.push(`/connector/metadata?id=${connector.id}`)}
-                        className="cursor-pointer w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border border-accent-primary/30 bg-accent-primary/5 text-accent-primary hover:bg-accent-primary/15 hover:border-accent-primary/50 transition-all"
-                      >
-                        <Layers size={13} />
-                        Manage Schema Metadata
-                      </button>
-                    )}
                   </div>
                 )}
               </div>
