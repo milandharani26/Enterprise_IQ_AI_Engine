@@ -94,6 +94,22 @@ class SemanticCacheService:
         )
         await db.execute(stmt)
         await db.commit()
+
+    @staticmethod
+    async def invalidate_assistant_cache(db: AsyncSession, assistant_id: UUID) -> None:
+        """
+        Increment cache_version for a single assistant.
+        All existing cache entries for this assistant become stale
+        because lookup_cache filters by cache_version.
+        """
+        logger.info(f"Invalidating semantic cache for assistant {assistant_id}")
+        stmt = (
+            update(Assistant)
+            .where(Assistant.assistant_id == assistant_id)
+            .values(cache_version=Assistant.cache_version + 1)
+        )
+        await db.execute(stmt)
+        await db.commit()
         
     @staticmethod
     async def cleanup_expired_cache(db: AsyncSession) -> int:

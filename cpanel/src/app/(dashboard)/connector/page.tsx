@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+
 import {
   HardDrive,
   Database,
@@ -55,7 +56,7 @@ export default function ConnectorPage() {
 
   const filteredConnectors = dbConnectors.filter((c: Connector) => {
     const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          c.connector_id.toLowerCase().includes(searchQuery.toLowerCase());
+      c.connector_id.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = filterStatus === 'all' || c.status === filterStatus;
     return matchesSearch && matchesType;
   });
@@ -106,7 +107,7 @@ export default function ConnectorPage() {
             credential_id: selectedCredentialId || null
           }
         });
-        
+
         // Auto-sync immediately after enabling
         setLocalSyncingIds(prev => [...prev, selectedConnector.id]);
         try {
@@ -121,7 +122,7 @@ export default function ConnectorPage() {
         console.error(e);
         toast.error(`Failed to enable ${selectedConnector.name} connector.`);
       }
-      
+
       setIsModalOpen(false);
       setSelectedConnector(null);
     }
@@ -134,12 +135,12 @@ export default function ConnectorPage() {
     : [];
 
   const getColorClasses = (colorBase: string) => {
-    return { 
-      bg: 'bg-accent-primary/10', 
-      text: 'text-accent-primary', 
-      shadow: 'shadow-[0_0_20px_rgba(91,106,248,0.15)]', 
-      border: 'border-accent-primary/20', 
-      cardBorder: 'border-accent-primary/20' 
+    return {
+      bg: 'bg-accent-primary/10',
+      text: 'text-accent-primary',
+      shadow: 'shadow-[0_0_20px_rgba(91,106,248,0.15)]',
+      border: 'border-accent-primary/20',
+      cardBorder: 'border-accent-primary/20'
     };
   };
 
@@ -265,10 +266,9 @@ export default function ConnectorPage() {
                   <div className="mt-4 pt-4 border-t border-black/5 dark:border-white/5 flex items-center justify-between">
                     <div className="flex flex-col">
                       <span className="text-xs text-gray-500 dark:text-gray-400">Sync Status</span>
-                      <span className={`text-sm font-semibold capitalize ${
-                        (connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id)) ? 'text-blue-600 dark:text-blue-400 animate-pulse' :
-                        connector.sync_status === 'synced' ? 'text-emerald-600 dark:text-emerald-400' :
-                          connector.sync_status === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'
+                      <span className={`text-sm font-semibold capitalize ${(connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id)) ? 'text-blue-600 dark:text-blue-400 animate-pulse' :
+                          connector.sync_status === 'synced' ? 'text-emerald-600 dark:text-emerald-400' :
+                            connector.sync_status === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'
                         }`}>
                         {(connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id)) ? 'Syncing' : (connector.sync_status || 'Pending')}
                       </span>

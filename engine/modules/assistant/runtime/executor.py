@@ -26,6 +26,7 @@ from engine.modules.assistant.runtime.sql_context import (
     enrich_config_for_sql,
 )
 from engine.modules.assistant.tools.base_tool import ToolContext
+from engine.modules.assistant.runtime.conversation_history import load_recent_conversation_history
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,19 @@ class AssistantExecutor:
             guardrails=guardrails_str,
         )
 
+        # Load recent conversation history — needed by the agent for multi-turn context
+        # (e.g. user says "I am Priyank" in turn 1, then "do you know my name?" in turn 2)
+        conversation_history = await load_recent_conversation_history(
+            conversation_id=conversation_id,
+            max_tokens=3000,
+        )
+        context.conversation_history = conversation_history
+
+        # Also pass history into SQL generation if SQL tool is present
+        if assistant_has_sql_tool(config_dict) and not conversation_history:
+            # already loaded above — no duplicate load needed
+            pass
+
         if assistant_has_drive_tool(config_dict):
             drive_inventory = await fetch_drive_document_inventory(organization_id)
             config_dict = enrich_config_for_drive(config_dict, drive_inventory)
@@ -261,6 +275,7 @@ class AssistantExecutor:
                 agent,
                 query,
                 session_id,
+                conversation_history=context.conversation_history,
             )
         except Exception as e:
             logger.exception("AGENT INVOCATION FAILED")
