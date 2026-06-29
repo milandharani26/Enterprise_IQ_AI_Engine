@@ -36,6 +36,8 @@ class SchemaTable(Base):
     schema_name = Column(String(255), nullable=True)
     table_name = Column(String(255), nullable=False)
     table_description = Column(Text, nullable=True)
+    # Sentinel flag: True means user manually set this description — sync will NOT overwrite it
+    user_table_description = Column(Boolean, server_default="false", nullable=False)
     row_count_estimate = Column(BigInteger, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -56,8 +58,11 @@ class SchemaColumn(Base):
     is_primary_key = Column(Boolean, server_default="false", nullable=False)
     default_value = Column(Text, nullable=True)
     column_description = Column(Text, nullable=True)
+    # Sentinel flag: True means user manually set this description — sync will NOT overwrite it
+    user_column_description = Column(Boolean, server_default="false", nullable=False)
     ordinal_position = Column(Integer, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class SchemaRelationship(Base):

@@ -33,6 +33,56 @@ class SchemaTableResponse(BaseModel):
         orm_mode = True
 
 # --------------------------
+# Metadata Enrichment (detailed, with IDs and user-override flags)
+# --------------------------
+
+class SchemaColumnDetailResponse(BaseModel):
+    id: UUID
+    column_name: str
+    data_type: str
+    is_nullable: bool
+    is_primary_key: bool
+    default_value: Optional[str]
+    column_description: Optional[str]
+    # True = user manually set this; sync will not overwrite
+    user_column_description: bool
+    ordinal_position: int
+    updated_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
+class SchemaTableDetailResponse(BaseModel):
+    id: UUID
+    table_name: str
+    schema_name: Optional[str]
+    table_description: Optional[str]
+    # True = user manually set this; sync will not overwrite
+    user_table_description: bool
+    row_count_estimate: Optional[int]
+    updated_at: Optional[datetime]
+    columns: List[SchemaColumnDetailResponse] = []
+
+    class Config:
+        orm_mode = True
+
+# --------------------------
+# Metadata Enrichment — Request Bodies
+# --------------------------
+
+class UpdateTableDescriptionRequest(BaseModel):
+    description: Optional[str] = Field(
+        None,
+        description="New description text. Pass null/None to clear the manual override."
+    )
+
+class UpdateColumnDescriptionRequest(BaseModel):
+    description: Optional[str] = Field(
+        None,
+        description="New description text. Pass null/None to clear the manual override."
+    )
+
+# --------------------------
 # Query Logs
 # --------------------------
 
