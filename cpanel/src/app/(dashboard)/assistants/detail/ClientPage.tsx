@@ -12,6 +12,9 @@ import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { useAssistantsHooks } from '@/hooks/api/useAssistants';
+import { useConnectorsHooks } from '@/hooks/api/useConnectors';
+import { useCredentialsHooks } from '@/hooks/api/useCredentials';
+import { useAppStore } from '@/store/useAppStore';
 import toast from 'react-hot-toast';
 
 export default function AssistantDetailsClient() {
@@ -19,11 +22,17 @@ export default function AssistantDetailsClient() {
   const id = searchParams?.get('id') as string;
   const router = useRouter();
 
-  const { 
-    useAssistantQuery, 
-    useUpdateAssistantMutation, 
-    useDeleteAssistantMutation, 
-    useUpdateAssistantStatusMutation, 
+  const { activeOrganizationId } = useAppStore();
+  const { useConnectorsQuery } = useConnectorsHooks();
+  const { data: dbConnectors = [] } = useConnectorsQuery(activeOrganizationId);
+  const { useCredentialsQuery } = useCredentialsHooks();
+  const { data: credentials = [] } = useCredentialsQuery(activeOrganizationId);
+
+  const {
+    useAssistantQuery,
+    useUpdateAssistantMutation,
+    useDeleteAssistantMutation,
+    useUpdateAssistantStatusMutation,
     useToolsQuery,
     usePreviewPromptMutation
   } = useAssistantsHooks();
@@ -169,7 +178,7 @@ export default function AssistantDetailsClient() {
   return (
     <div className="flex flex-col h-full">
       {/* Header Bar */}
-      <div className="flex items-center justify-between pb-6 border-b border-border-color shrink-0">
+      <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 gap-4 border-b border-border-color shrink-0">
         <div className="flex items-center gap-4">
           <Link href="/assistants">
             <Button variant="ghost" size="sm" className="p-2 -ml-2 rounded-full text-muted-text hover:text-primary-text hover:bg-secondary-bg">
@@ -181,7 +190,7 @@ export default function AssistantDetailsClient() {
               <Bot size={20} />
             </div>
             <div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <h1 className="m-0 text-xl font-bold text-primary-text tracking-tight">{assistant.assistant_name}</h1>
                 {isActive ? (
                   <Badge variant="success" size="sm" className="gap-1.5">
@@ -197,7 +206,7 @@ export default function AssistantDetailsClient() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button variant="ghost" className="gap-2 text-secondary-text hover:text-primary-text" onClick={handlePreviewPrompt} disabled={previewMutation.isPending}>
             {previewMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <FileCheck size={16} />}
             Check prompt
@@ -218,10 +227,10 @@ export default function AssistantDetailsClient() {
       </div>
 
       {/* Main Unified Layout */}
-      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden min-h-0 pt-6 gap-8">
+      <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden lg:min-h-0 pt-6 gap-8 pb-6">
 
         {/* Left Column: Configuration (Scrollable) */}
-        <div className="w-full lg:w-[450px] xl:w-[500px] flex flex-col gap-10 overflow-y-auto pr-2 pb-10 custom-scrollbar shrink-0">
+        <div className="w-full lg:w-[450px] xl:w-[500px] flex flex-col gap-10 lg:overflow-y-auto pr-2 lg:pb-10 custom-scrollbar shrink-0">
 
           {/* Section: Basic Identity */}
           <section className="flex flex-col gap-5">
@@ -290,7 +299,11 @@ export default function AssistantDetailsClient() {
                       </div>
                       <div className="flex flex-col">
                         <span className="text-sm font-semibold text-primary-text">{t.tool_id || t.id}</span>
-                        <span className="text-xs text-muted-text">{(t.credential_id || t.credential) === 'none' ? 'No Credential' : 'API Key Required'}</span>
+                        <span className="text-xs text-muted-text">
+                          {(t.credential_id || t.credential) === 'none' 
+                            ? 'No Credential' 
+                            : credentials.find((c: any) => c.id === (t.credential_id || t.credential))?.name || 'API Key Required'}
+                        </span>
                       </div>
                     </div>
                     <Button
@@ -347,15 +360,15 @@ export default function AssistantDetailsClient() {
         </div>
 
         {/* Right Column: System Instructions (Prompt) */}
-        <div className="flex-1 flex flex-col bg-secondary-bg border border-border-color rounded-2xl overflow-hidden shadow-sm">
-          <div className="flex items-center justify-between p-4 border-b border-border-color bg-card-bg shrink-0">
+        <div className="flex-1 flex flex-col bg-secondary-bg border border-border-color rounded-2xl overflow-hidden shadow-sm min-h-[400px] lg:min-h-0">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between p-4 border-b border-border-color bg-card-bg shrink-0 gap-4">
             <div>
               <h2 className="text-sm font-semibold text-primary-text tracking-wide flex items-center gap-2">
                 System Instructions
               </h2>
               <p className="text-xs text-secondary-text mt-0.5">Define the core personality and behavior.</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button variant="ghost" size="sm" className="text-xs bg-tertiary-bg" onClick={() => setFormData({ ...formData, system_prompt: "You are a helpful, extremely strictly bound assistant. Follow instructions to the letter." })}>Strict Template</Button>
               <Button variant="ghost" size="sm" className="text-xs bg-tertiary-bg" onClick={() => setFormData({ ...formData, system_prompt: "You are a warm, extremely friendly, and highly empathetic customer support assistant." })}>Friendly Template</Button>
               <div className="w-px h-4 bg-border-color mx-1"></div>
@@ -366,7 +379,7 @@ export default function AssistantDetailsClient() {
             </div>
           </div>
 
-          <div className="flex-1 p-0 relative">
+          <div className="flex-1 p-0 relative min-h-[300px] lg:min-h-0">
             <textarea
               className="absolute inset-0 w-full h-full p-6 bg-transparent border-none text-primary-text font-mono text-sm leading-relaxed resize-none focus:outline-none custom-scrollbar"
               value={formData.system_prompt}
@@ -390,13 +403,50 @@ export default function AssistantDetailsClient() {
             label="Tool ID"
             options={availableTools?.map((t: any) => ({ label: t.tool_id, value: t.tool_id })) || []}
             value={newTool.tool_id}
-            onChange={(e) => setNewTool({ ...newTool, tool_id: e.target.value })}
+            onChange={(e) => {
+              const selectedTool = e.target.value;
+              let defaultCred = 'none';
+              
+              // Find if there is a connector configured for this tool and use its credential_id as default
+              let matchedConnector = null;
+              if (selectedTool === 'drive_search') {
+                matchedConnector = dbConnectors.find((c: any) => c.connector_id === 'google_drive');
+              } else if (selectedTool === 'sql_query') {
+                matchedConnector = dbConnectors.find((c: any) => c.connector_id === 'postgresql' || c.connector_id === 'mysql');
+              }
+
+              if (matchedConnector && matchedConnector.credential_id) {
+                defaultCred = matchedConnector.credential_id;
+              } else {
+                // Fallback to the first available credential
+                const applicable = credentials.filter((c: any) => {
+                  const provider = c.provider?.toLowerCase() || '';
+                  const status = c.status?.toLowerCase() || '';
+                  if (selectedTool === 'drive_search') return provider === 'google' && status === 'active';
+                  if (selectedTool === 'sql_query') return (provider === 'postgresql' || provider === 'mysql') && status === 'active';
+                  return false;
+                });
+                if (applicable.length > 0) {
+                  defaultCred = applicable[0].id;
+                }
+              }
+              setNewTool({ ...newTool, tool_id: selectedTool, credential_id: defaultCred });
+            }}
           />
+          
           <Select
             label="Credential"
             options={[
               { label: 'None', value: 'none' },
-              { label: 'API Key', value: 'api_key' },
+              ...credentials
+                .filter((c: any) => {
+                  const provider = c.provider?.toLowerCase() || '';
+                  const status = c.status?.toLowerCase() || '';
+                  if (newTool.tool_id === 'drive_search') return provider === 'google' && status === 'active';
+                  if (newTool.tool_id === 'sql_query') return (provider === 'postgresql' || provider === 'mysql') && status === 'active';
+                  return false;
+                })
+                .map((c: any) => ({ label: `${c.name} (${c.provider})`, value: c.id }))
             ]}
             value={newTool.credential_id}
             onChange={(e) => setNewTool({ ...newTool, credential_id: e.target.value })}
@@ -417,8 +467,11 @@ export default function AssistantDetailsClient() {
               Cancel
             </Button>
             <Button variant="primary" type="button" onClick={() => {
-              if (formData.tools.some((t: any) => t.tool_id === newTool.tool_id || t.id === newTool.tool_id)) {
-                toast.error(`The tool '${newTool.tool_id}' is already configured.`);
+              if (formData.tools.some((t: any) => 
+                (t.tool_id === newTool.tool_id || t.id === newTool.tool_id) && 
+                ((t.credential_id || 'none') === (newTool.credential_id || 'none') || (t.credential || 'none') === (newTool.credential_id || 'none'))
+              )) {
+                toast.error(`The tool '${newTool.tool_id}' is already configured with this credential.`);
                 return;
               }
               setFormData({ ...formData, tools: [...formData.tools, newTool] });
@@ -575,7 +628,9 @@ export default function AssistantDetailsClient() {
               <div>
                 <h3 className="text-sm font-semibold text-primary-text mb-1">Credential Requirement</h3>
                 <Badge variant="outline" className="capitalize mt-1">
-                  {(viewingTool.credential_id || viewingTool.credential) === 'none' ? 'No Credential' : 'API Key / Token Required'}
+                  {(viewingTool.credential_id || viewingTool.credential) === 'none' 
+                    ? 'No Credential' 
+                    : credentials.find((c: any) => c.id === (viewingTool.credential_id || viewingTool.credential))?.name || 'API Key / Token Required'}
                 </Badge>
               </div>
             </div>
@@ -636,7 +691,7 @@ export default function AssistantDetailsClient() {
                 {previewResult.compiled_prompt}
               </pre>
             </div>
-            
+
             <div className="flex justify-end gap-3 mt-2 pt-4 border-t border-border-color">
               <Button variant="secondary" onClick={() => setIsPreviewModalOpen(false)}>Close</Button>
             </div>

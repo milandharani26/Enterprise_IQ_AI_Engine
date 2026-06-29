@@ -2,6 +2,7 @@
 
 import React, { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Upload,
   FileText,
@@ -12,7 +13,11 @@ import {
   MessageSquare,
   CloudUpload,
   Search,
-  Filter
+  Filter,
+  Database,
+  ChevronRight,
+  RefreshCw,
+  Table2
 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import toast from 'react-hot-toast';
@@ -21,6 +26,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useAppStore } from '@/store/useAppStore';
 import { useDocumentsHooks, DocumentRecord } from '@/hooks/api/useDocuments';
 import { useDriveDocumentsHooks, DriveDocumentRecord } from '@/hooks/api/useDriveDocuments';
+import { useConnectorsHooks, Connector } from '@/hooks/api/useConnectors';
 import { HardDrive } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -41,6 +47,7 @@ function statusBadge(status: DocumentRecord['status'] | DriveDocumentRecord['sta
 }
 
 export default function DocumentsPage() {
+  const router = useRouter();
   const { activeOrganizationId, hasHydrated } = useAppStore();
   const { useDocumentsQuery, useUploadDocumentMutation, useDeleteDocumentMutation } = useDocumentsHooks();
   const { data: listResponse, isLoading, refetch } = useDocumentsQuery(activeOrganizationId, {
@@ -52,6 +59,14 @@ export default function DocumentsPage() {
   const { useDriveDocumentsQuery, useDeleteDriveDocumentMutation } = useDriveDocumentsHooks();
   const { data: driveListResponse, isLoading: isLoadingDrive } = useDriveDocumentsQuery(activeOrganizationId, { pollWhileProcessing: true });
   const deleteDriveMutation = useDeleteDriveDocumentMutation();
+
+  // Schema Metadata connector picker
+  const { useConnectorsQuery } = useConnectorsHooks();
+  const { data: allConnectors = [], isLoading: isLoadingConnectors } = useConnectorsQuery(activeOrganizationId);
+  const dbConnectors = (allConnectors as Connector[]).filter(
+    (c) => c.connector_id !== 'google_drive' && c.sync_status === 'synced'
+  );
+  const [isSchemaModalOpen, setIsSchemaModalOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'local' | 'drive'>('local');
 
@@ -226,7 +241,7 @@ export default function DocumentsPage() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 mt-4 mb-6">
+        <div className="flex items-center gap-2 mt-4 mb-6 flex-wrap">
           <button
             onClick={() => setActiveTab('local')}
             className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all duration-300 cursor-pointer ${activeTab === 'local'
@@ -244,6 +259,12 @@ export default function DocumentsPage() {
               }`}
           >
             <HardDrive className="w-4 h-4" /> Google Drive
+          </button>
+          <button
+            onClick={() => setIsSchemaModalOpen(true)}
+            className="px-6 py-2.5 rounded-full font-medium text-sm flex items-center gap-2 transition-all duration-300 cursor-pointer bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 hover:scale-105"
+          >
+            <Database className="w-4 h-4" /> Schema Metadata
           </button>
         </div>
 
@@ -504,6 +525,59 @@ export default function DocumentsPage() {
             {deleteDriveMutation.isPending ? 'Deleting...' : 'Yes, Delete Document'}
           </Button>
         </div>
+      </Modal>
+
+      {/* Schema Metadata — Connector Picker Modal */}
+      <Modal
+        isOpen={isSchemaModalOpen}
+        onClose={() => setIsSchemaModalOpen(false)}
+        title="Select a Database Connector"
+        description="Choose a synced database connector to manage its schema metadata — table and column descriptions used by the AI."
+        maxWidth="max-w-lg"
+      >
+        {isLoadingConnectors ? (
+          <div className="space-y-3">
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+          </div>
+        ) : dbConnectors.length === 0 ? (
+          <div className="text-center py-10">
+            <Database size={36} className="mx-auto text-muted-text mb-3" />
+            <p className="text-sm font-semibold text-primary-text">No synced database connectors</p>
+            <p className="text-xs text-secondary-text mt-1 max-w-xs mx-auto">
+              Go to the Connectors page, add a database connector, and sync it before managing schema metadata.
+            </p>
+            <Link href="/connector">
+              <Button variant="primary" className="mt-5">Go to Connectors</Button>
+            </Link>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {dbConnectors.map((connector) => (
+              <li key={connector.id}>
+                <button
+                  onClick={() => {
+                    setIsSchemaModalOpen(false);
+                    router.push(`/connector/metadata?id=${connector.id}`);
+                  }}
+                  className="cursor-pointer w-full flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border-color hover:border-accent-primary/40 hover:bg-accent-primary/5 transition-all group text-left"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-accent-primary/10 flex items-center justify-center shrink-0">
+                    <Table2 size={18} className="text-accent-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm text-primary-text truncate">{connector.name}</p>
+                    <p className="text-xs text-secondary-text capitalize mt-0.5">
+                      {connector.provider} &middot; <span className="text-accent-success font-medium">Synced</span>
+                    </p>
+                  </div>
+                  <ChevronRight size={16} className="text-muted-text group-hover:text-accent-primary transition-colors shrink-0" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Modal>
     </div>
   );

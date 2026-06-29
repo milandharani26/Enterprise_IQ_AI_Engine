@@ -3,6 +3,7 @@ from uuid import UUID
 from typing import Dict, List, Any
 
 from sqlalchemy import select, delete
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 import asyncpg
 # import aiomysql  # Will be added for MySQL support
@@ -368,39 +369,63 @@ class SchemaCrawlerService:
             conn.close()
 
     async def _persist_metadata(self, db: AsyncSession, conn_obj: Connector, tables: list, columns: list, relationships: list):
-        """Saves metadata to database, replacing old records."""
-        
-        # 1. Delete existing relationships and tables (cascades to columns and embeddings)
-        await db.execute(delete(SchemaRelationship).where(SchemaRelationship.connector_id == conn_obj.id))
-        await db.execute(delete(SchemaTable).where(SchemaTable.connector_id == conn_obj.id))
-        await db.flush()
+        """
+        Saves metadata to database using an UPSERT strategy.
 
-        # 2. Insert Tables
-        table_objs = []
-        table_map = {} # map table_name -> UUID
+        User-set descriptions (where user_table_description / user_column_description = True)
+        are preserved and never overwritten by the sync crawler. All structural fields
+        (schema_name, data_type, is_nullable, etc.) are always refreshed.
+        """
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        from datetime import datetime
+
+        # 1. Upsert Tables (ON CONFLICT DO UPDATE — preserve user descriptions)
+        table_map = {}  # table_name -> UUID
+
         for t in tables:
-            obj = SchemaTable(
+            stmt = pg_insert(SchemaTable).values(
                 organization_id=conn_obj.organization_id,
                 connector_id=conn_obj.id,
                 schema_name=t["schema_name"],
                 table_name=t["table_name"],
-                table_description=t.get("table_description")
-            )
-            db.add(obj)
-            table_objs.append(obj)
-        
-        await db.flush()
-        
-        for obj in table_objs:
-            table_map[obj.table_name] = obj.id
+                table_description=t.get("table_description"),
+                user_table_description=False,
+            ).on_conflict_do_update(
+                index_elements=["connector_id", "schema_name", "table_name"],
+                set_={
+                    # Always refresh structural fields
+                    "schema_name": t["schema_name"],
+                    "updated_at": datetime.utcnow(),
+                    # Only overwrite description if user has NOT set a manual one
+                    "table_description": sa.case(
+                        (SchemaTable.__table__.c.user_table_description == False,
+                         t.get("table_description")),
+                        else_=SchemaTable.__table__.c.table_description
+                    ),
+                }
+            ).returning(SchemaTable.__table__.c.id, SchemaTable.__table__.c.table_name)
 
-        # 3. Insert Columns
-        col_objs = []
+            result = await db.execute(stmt)
+            row = result.fetchone()
+            if row:
+                table_map[row.table_name] = row.id
+
+        await db.flush()
+
+        # Re-fetch any tables not touched by upsert (e.g. if schema had no conflict rows)
+        if not table_map:
+            existing = (await db.execute(
+                select(SchemaTable).where(SchemaTable.connector_id == conn_obj.id)
+            )).scalars().all()
+            table_map = {t.table_name: t.id for t in existing}
+
+        # 2. Upsert Columns (ON CONFLICT DO UPDATE — preserve user descriptions)
         for c in columns:
             table_id = table_map.get(c["table_name"])
             if not table_id:
-                continue # Edge case
-            obj = SchemaColumn(
+                continue  # Edge case: table wasn't upserted
+
+            stmt = pg_insert(SchemaColumn).values(
                 table_id=table_id,
                 column_name=c["column_name"],
                 data_type=c["data_type"],
@@ -408,14 +433,46 @@ class SchemaCrawlerService:
                 is_primary_key=c["is_primary_key"],
                 default_value=str(c["default_value"]) if c["default_value"] is not None else None,
                 column_description=c.get("column_description"),
-                ordinal_position=c["ordinal_position"]
+                user_column_description=False,
+                ordinal_position=c["ordinal_position"],
+            ).on_conflict_do_update(
+                index_elements=["table_id", "column_name"],
+                set_={
+                    # Always refresh structural fields
+                    "data_type": c["data_type"],
+                    "is_nullable": c["is_nullable"],
+                    "is_primary_key": c["is_primary_key"],
+                    "default_value": str(c["default_value"]) if c["default_value"] is not None else None,
+                    "ordinal_position": c["ordinal_position"],
+                    "updated_at": datetime.utcnow(),
+                    # Only overwrite description if user has NOT set a manual one
+                    "column_description": sa.case(
+                        (SchemaColumn.__table__.c.user_column_description == False,
+                         c.get("column_description")),
+                        else_=SchemaColumn.__table__.c.column_description
+                    ),
+                }
             )
-            col_objs.append(obj)
-        
-        if col_objs:
-            db.add_all(col_objs)
+            await db.execute(stmt)
 
-        # 4. Insert Relationships
+        await db.flush()
+
+        # 3. Remove schema_tables rows that no longer exist in source DB
+        #    (but keep the ones whose tables are still present)
+        synced_table_names = {t["table_name"] for t in tables}
+        stale_tables = (await db.execute(
+            select(SchemaTable).where(
+                SchemaTable.connector_id == conn_obj.id,
+                SchemaTable.table_name.notin_(synced_table_names)
+            )
+        )).scalars().all()
+        for stale in stale_tables:
+            await db.delete(stale)
+
+        # 4. Upsert Relationships (always safe to replace — no user data here)
+        await db.execute(delete(SchemaRelationship).where(SchemaRelationship.connector_id == conn_obj.id))
+        await db.flush()
+
         rel_objs = []
         for r in relationships:
             obj = SchemaRelationship(
@@ -427,7 +484,7 @@ class SchemaCrawlerService:
                 target_column=r["target_column"]
             )
             rel_objs.append(obj)
-        
+
         if rel_objs:
             db.add_all(rel_objs)
 

@@ -32,7 +32,15 @@ import { Button } from '../ui/Button';
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { isSidebarOpen, setSidebarOpen } = useAppStore();
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+
+  // Close sidebar on route change on mobile
+  React.useEffect(() => {
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, [pathname, setSidebarOpen]);
 
   if (pathname.startsWith('/settings')) {
     return <SettingsSidebar />;
@@ -40,7 +48,15 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="w-[220px] h-screen bg-secondary-bg backdrop-blur-2xl backdrop-saturate-[180%] shadow-[4px_0_24px_rgba(0,0,0,0.02)] border-r border-border-color flex flex-col fixed top-0 left-0 z-40 overflow-hidden">
+      {/* Mobile Backdrop Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      
+      <aside className={`w-[220px] h-screen bg-secondary-bg backdrop-blur-2xl backdrop-saturate-[180%] shadow-[4px_0_24px_rgba(0,0,0,0.02)] border-r border-border-color flex flex-col fixed top-0 left-0 z-40 overflow-hidden transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div className="h-[64px] border-b border-border-color flex items-center px-4 shrink-0">
         <div className="flex items-center gap-4 min-w-[200px]">
           <div className="text-accent-primary shrink-0 flex items-center justify-center">

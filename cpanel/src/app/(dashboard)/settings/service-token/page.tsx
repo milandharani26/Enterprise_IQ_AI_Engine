@@ -176,8 +176,8 @@ export default function ServiceTokenPage() {
         </div>
 
         {/* Minimalist Edge-to-Edge Table List */}
-        <div className="bg-card-bg border border-border-color rounded-2xl overflow-hidden shadow-sm flex-1">
-          <table className="w-full text-left border-collapse">
+        <div className="bg-card-bg border border-border-color rounded-2xl overflow-x-auto shadow-sm flex-1">
+          <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
               <tr className="bg-secondary-bg/30 border-b border-border-color">
                 <th className="py-4 px-6 text-xs font-bold text-muted-text uppercase tracking-widest w-[30%]">Application</th>

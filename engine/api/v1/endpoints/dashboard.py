@@ -103,6 +103,7 @@ async def get_dashboard_metrics(organization_id: UUID, db: AsyncSession = Depend
         kb_result = await db.execute(
             select(Document.source, func.count(Document.id))
             .where(Document.workspace_id == organization_id)
+            .where(Document.status == 'indexed')
             .group_by(Document.source)
         )
         knowledge_composition = []
@@ -113,6 +114,37 @@ async def get_dashboard_metrics(organization_id: UUID, db: AsyncSession = Depend
                 "source": source,
                 "count": count
             })
+            
+        # Add Google Drive Documents to Composition
+        from engine.shared.models.drive_document_model import DriveDocument
+        drive_kb_result = await db.execute(
+            select(func.count(DriveDocument.id))
+            .where(DriveDocument.workspace_id == organization_id)
+            .where(DriveDocument.status == 'indexed')
+        )
+        drive_count = drive_kb_result.scalar() or 0
+        if drive_count > 0:
+            knowledge_composition.append({
+                "source": "Google Drive",
+                "count": drive_count
+            })
+            
+        # Add Database Schema Tables to Composition (MySQL, Postgres, etc.)
+        from engine.modules.database_connector.database_connector_models import SchemaTable
+        db_tables_result = await db.execute(
+            select(Connector.provider, func.count(SchemaTable.id))
+            .join(SchemaTable, SchemaTable.connector_id == Connector.id)
+            .where(Connector.organization_id == organization_id)
+            .group_by(Connector.provider)
+        )
+        for row in db_tables_result.all():
+            provider = row[0] or "Database"
+            count = row[1]
+            if count > 0:
+                knowledge_composition.append({
+                    "source": provider,
+                    "count": count
+                })
 
         # Top Assistants by Usage
         top_assistants_result = await db.execute(
