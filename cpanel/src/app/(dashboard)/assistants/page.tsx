@@ -144,7 +144,7 @@ export default function AssistantsPage() {
 
       {/* Grid */}
       {isLoading ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6">
           {[1, 2, 3, 4, 5, 6].map(i => (
             <div key={i} className="flex flex-col bg-card-bg border border-border-color rounded-[12px] p-6 animate-brutal-pulse" style={{ animationDelay: `${i * 100}ms` }}>
               <div className="flex justify-between items-start mb-4">
@@ -164,9 +164,9 @@ export default function AssistantsPage() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6">
           {filteredAssistants.length > 0 ? filteredAssistants.map((assistant: Assistant, idx: number) => (
-            <AssistantCard key={assistant.assistant_id || idx} assistant={assistant} />
+            <AssistantCard key={assistant.assistant_id || idx} assistant={assistant} index={idx} />
           )) : (
             <div className="col-span-full text-center text-muted-text p-10 text-[13px]">
               No assistants found. Create one!

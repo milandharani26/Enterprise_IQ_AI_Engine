@@ -29,6 +29,11 @@ export const useConnectorsHooks = () => {
         return data as Connector[];
       },
       enabled: !!organizationId,
+      refetchInterval: (query) => {
+        const data = query.state.data as Connector[] | undefined;
+        // Poll every 3 seconds if any connector is actively syncing
+        return data?.some(c => c.sync_status === 'syncing') ? 3000 : false;
+      },
     });
   };
 
@@ -66,9 +71,9 @@ export const useConnectorsHooks = () => {
         const { data } = await apiClient.post(`/connectors/${id}/sync`);
         return data;
       },
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['connectors'] });
-        toast.success('Connector sync started');
+      onSuccess: async (data) => {
+        await queryClient.invalidateQueries({ queryKey: ['connectors'] });
+        toast.success(data?.message || 'Connector sync started');
       },
       onError: (error: any) => {
         toast.error(error?.response?.data?.detail || 'Failed to start connector sync');

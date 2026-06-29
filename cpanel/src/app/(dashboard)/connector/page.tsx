@@ -49,27 +49,14 @@ export default function ConnectorPage() {
   const [selectedCredentialId, setSelectedCredentialId] = useState<string>('');
   const [localSyncingIds, setLocalSyncingIds] = useState<string[]>([]);
 
-  // Clear local syncing state if the real DB status has caught up and shows 'syncing' or 'synced' or 'failed'
-  useEffect(() => {
-    if (localSyncingIds.length === 0) return;
 
-    const newIds = localSyncingIds.filter(id => {
-      const conn = dbConnectors.find((c: Connector) => c.id === id);
-      // Keep in local state only if the DB still hasn't registered it as syncing, synced, or failed
-      return conn && conn.sync_status !== 'syncing' && conn.sync_status !== 'synced' && conn.sync_status !== 'failed';
-    });
-
-    if (newIds.length !== localSyncingIds.length) {
-      setLocalSyncingIds(newIds);
-    }
-  }, [dbConnectors, localSyncingIds]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
   const filteredConnectors = dbConnectors.filter((c: Connector) => {
     const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          c.connector_id.toLowerCase().includes(searchQuery.toLowerCase());
+      c.connector_id.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = filterStatus === 'all' || c.status === filterStatus;
     return matchesSearch && matchesType;
   });
@@ -120,15 +107,22 @@ export default function ConnectorPage() {
             credential_id: selectedCredentialId || null
           }
         });
-        
+
         // Auto-sync immediately after enabling
-        await syncConnectorMutation.mutateAsync(selectedConnector.id);
-        toast.success(`${selectedConnector.name} connector enabled and data sync started!`);
+        setLocalSyncingIds(prev => [...prev, selectedConnector.id]);
+        try {
+          await syncConnectorMutation.mutateAsync(selectedConnector.id);
+          toast.success(`${selectedConnector.name} connector enabled and data sync started!`);
+        } catch (syncError) {
+          console.error(syncError);
+          setLocalSyncingIds(prev => prev.filter(id => id !== selectedConnector.id));
+          toast.error(`Failed to start sync for ${selectedConnector.name}.`);
+        }
       } catch (e: unknown) {
         console.error(e);
         toast.error(`Failed to enable ${selectedConnector.name} connector.`);
       }
-      
+
       setIsModalOpen(false);
       setSelectedConnector(null);
     }
@@ -141,12 +135,12 @@ export default function ConnectorPage() {
     : [];
 
   const getColorClasses = (colorBase: string) => {
-    return { 
-      bg: 'bg-accent-primary/10', 
-      text: 'text-accent-primary', 
-      shadow: 'shadow-[0_0_20px_rgba(91,106,248,0.15)]', 
-      border: 'border-accent-primary/20', 
-      cardBorder: 'border-accent-primary/20' 
+    return {
+      bg: 'bg-accent-primary/10',
+      text: 'text-accent-primary',
+      shadow: 'shadow-[0_0_20px_rgba(91,106,248,0.15)]',
+      border: 'border-accent-primary/20',
+      cardBorder: 'border-accent-primary/20'
     };
   };
 
@@ -190,7 +184,7 @@ export default function ConnectorPage() {
           Please select an Organization first.
         </div>
       ) : isLoadingConnectors ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6">
           {[1, 2, 3, 4, 5, 6].map(i => (
             <div key={i} className="flex flex-col bg-card-bg border border-border-color rounded-[16px] p-6">
               <div className="flex items-start justify-between mb-6">
@@ -213,7 +207,7 @@ export default function ConnectorPage() {
           ))}
         </div>
       ) : activeTab === 'connectors' && (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6">
           {filteredConnectors.map((connector: Connector, idx: number) => {
             const meta = UI_META[connector.connector_id] || UI_META['google_drive'];
             const colors = getColorClasses(meta.colorBase);
@@ -263,35 +257,36 @@ export default function ConnectorPage() {
                 <p className={`text-sm font-medium ${isMapped ? 'text-gray-800 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500'}`}>
                   {isMapped ? (
                     <span className="flex items-center gap-1.5">
-                      Mapped to: <span className="text-accent-primary bg-accent-primary/10 px-2 py-0.5 rounded-md">{credentials.find(c => c.id === connector.credential_id)?.name || 'Unknown Credential'}</span>
+                      Default credential: <span className="text-accent-primary bg-accent-primary/10 px-2 py-0.5 rounded-md">{credentials.find((c: Credential) => c.id === connector.credential_id)?.name || 'Unknown Credential'}</span>
                     </span>
-                  ) : 'No credential mapped yet.'}
+                  ) : 'No default credential selected yet.'}
                 </p>
 
                 {connector.status === 'enabled' && (
-                  <div className="mt-4 pt-4 border-t border-black/5 dark:border-white/5 flex flex-col gap-3">
-                    {/* Sync Status Row */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">Sync Status</span>
-                        <span className={`text-sm font-semibold capitalize ${connector.sync_status === 'synced' ? 'text-emerald-600 dark:text-emerald-400' :
-                          connector.sync_status === 'syncing' ? 'text-blue-600 dark:text-blue-400 animate-pulse' :
+                  <div className="mt-4 pt-4 border-t border-black/5 dark:border-white/5 flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Sync Status</span>
+                      <span className={`text-sm font-semibold capitalize ${(connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id)) ? 'text-blue-600 dark:text-blue-400 animate-pulse' :
+                          connector.sync_status === 'synced' ? 'text-emerald-600 dark:text-emerald-400' :
                             connector.sync_status === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'
-                          }`}>
-                          {connector.sync_status || 'Pending'}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setLocalSyncingIds(prev => [...prev, connector.id]);
-                          syncConnectorMutation.mutate(connector.id);
-                        }}
-                        disabled={connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id)}
-                        className="cursor-pointer disabled:cursor-not-allowed px-3 py-1.5 rounded-lg text-xs font-medium bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-900 dark:text-white transition-colors disabled:opacity-50"
-                      >
-                        {connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id) ? 'Syncing...' : 'Sync Data'}
-                      </button>
+                        }`}>
+                        {(connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id)) ? 'Syncing' : (connector.sync_status || 'Pending')}
+                      </span>
                     </div>
+                    <button
+                      onClick={() => {
+                        setLocalSyncingIds(prev => [...prev, connector.id]);
+                        syncConnectorMutation.mutate(connector.id, {
+                          onSettled: () => {
+                            setLocalSyncingIds(prev => prev.filter(id => id !== connector.id));
+                          }
+                        });
+                      }}
+                      disabled={connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id)}
+                      className="cursor-pointer disabled:cursor-not-allowed px-3 py-1.5 rounded-lg text-xs font-medium bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-900 dark:text-white transition-colors disabled:opacity-50"
+                    >
+                      {connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id) ? 'Syncing...' : 'Sync Data'}
+                    </button>
                   </div>
                 )}
               </div>
