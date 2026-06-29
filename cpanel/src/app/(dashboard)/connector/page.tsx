@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   HardDrive,
   Database,
@@ -8,7 +9,8 @@ import {
   X,
   Plus,
   Search,
-  Filter
+  Filter,
+  Layers
 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { useConnectorsHooks, Connector } from '@/hooks/api/useConnectors';
@@ -31,6 +33,7 @@ const UI_META: Record<string, UIMetaDef> = {
 };
 
 export default function ConnectorPage() {
+  const router = useRouter();
   const { activeOrganizationId } = useAppStore();
   const { useConnectorsQuery, useAddConnectorMutation, useUpdateConnectorMutation, useSyncConnectorMutation } = useConnectorsHooks();
   const { useCredentialsQuery } = useCredentialsHooks();
@@ -268,26 +271,40 @@ export default function ConnectorPage() {
                 </p>
 
                 {connector.status === 'enabled' && (
-                  <div className="mt-4 pt-4 border-t border-black/5 dark:border-white/5 flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">Sync Status</span>
-                      <span className={`text-sm font-semibold capitalize ${connector.sync_status === 'synced' ? 'text-emerald-600 dark:text-emerald-400' :
-                        connector.sync_status === 'syncing' ? 'text-blue-600 dark:text-blue-400 animate-pulse' :
-                          connector.sync_status === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'
-                        }`}>
-                        {connector.sync_status || 'Pending'}
-                      </span>
+                  <div className="mt-4 pt-4 border-t border-black/5 dark:border-white/5 flex flex-col gap-3">
+                    {/* Sync Status Row */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Sync Status</span>
+                        <span className={`text-sm font-semibold capitalize ${connector.sync_status === 'synced' ? 'text-emerald-600 dark:text-emerald-400' :
+                          connector.sync_status === 'syncing' ? 'text-blue-600 dark:text-blue-400 animate-pulse' :
+                            connector.sync_status === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'
+                          }`}>
+                          {connector.sync_status || 'Pending'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setLocalSyncingIds(prev => [...prev, connector.id]);
+                          syncConnectorMutation.mutate(connector.id);
+                        }}
+                        disabled={connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id)}
+                        className="cursor-pointer disabled:cursor-not-allowed px-3 py-1.5 rounded-lg text-xs font-medium bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-900 dark:text-white transition-colors disabled:opacity-50"
+                      >
+                        {connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id) ? 'Syncing...' : 'Sync Data'}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => {
-                        setLocalSyncingIds(prev => [...prev, connector.id]);
-                        syncConnectorMutation.mutate(connector.id);
-                      }}
-                      disabled={connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id)}
-                      className="cursor-pointer disabled:cursor-not-allowed px-3 py-1.5 rounded-lg text-xs font-medium bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-gray-900 dark:text-white transition-colors disabled:opacity-50"
-                    >
-                      {connector.sync_status === 'syncing' || localSyncingIds.includes(connector.id) ? 'Syncing...' : 'Sync Data'}
-                    </button>
+
+                    {/* Manage Metadata button — only for DB connectors that have been synced */}
+                    {connector.connector_id !== 'google_drive' && connector.sync_status === 'synced' && (
+                      <button
+                        onClick={() => router.push(`/connector/metadata?id=${connector.id}`)}
+                        className="cursor-pointer w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border border-accent-primary/30 bg-accent-primary/5 text-accent-primary hover:bg-accent-primary/15 hover:border-accent-primary/50 transition-all"
+                      >
+                        <Layers size={13} />
+                        Manage Schema Metadata
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
