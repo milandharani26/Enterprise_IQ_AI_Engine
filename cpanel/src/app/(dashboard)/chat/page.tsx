@@ -44,8 +44,8 @@ import remarkGfm from 'remark-gfm';
 
 function MarkdownMessage({ text }: { text: string }) {
   return (
-    <div className="text-sm leading-relaxed space-y-2">
-      <ReactMarkdown 
+    <div className="text-sm leading-relaxed space-y-2 break-words [&_table]:w-full [&_table]:my-4 [&_table]:border-collapse [&_th]:border [&_th]:border-gray-200 dark:[&_th]:border-white/10 [&_th]:bg-gray-50 dark:[&_th]:bg-white/5 [&_th]:px-4 [&_th]:py-2 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-gray-200 dark:[&_td]:border-white/10 [&_td]:px-4 [&_td]:py-2">
+      <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           a: ({ node, ...props }) => (
@@ -75,10 +75,7 @@ export default function ChatPage() {
     pollWhileProcessing: false,
   });
 
-  const indexedDocCount = useMemo(
-    () => (documentsResponse?.data || []).filter((d) => d.status === 'indexed').length,
-    [documentsResponse]
-  );
+
 
   const enabledAssistants = useMemo(
     () => assistants.filter((a: Assistant) => a.status === 'enabled'),
@@ -221,9 +218,9 @@ export default function ChatPage() {
             <span className="font-semibold text-sm text-gray-800 dark:text-gray-200 tracking-tight">
               {selectedAssistant?.assistant_name || 'Document Chat'}
             </span>
-            {hasRag && indexedDocCount > 0 && (
+            {hasRag && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                {indexedDocCount} doc{indexedDocCount !== 1 ? 's' : ''} indexed
+                Ready to answer
               </span>
             )}
           </div>
@@ -250,11 +247,10 @@ export default function ChatPage() {
                         setSelectedAssistant(ast);
                         setShowAssistantPicker(false);
                       }}
-                      className={`w-full cursor-pointer text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5 ${
-                        selectedAssistant?.assistant_id === ast.assistant_id
+                      className={`w-full cursor-pointer text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5 ${selectedAssistant?.assistant_id === ast.assistant_id
                           ? 'text-blue-600 dark:text-blue-400'
                           : 'text-gray-700 dark:text-gray-300'
-                      }`}
+                        }`}
                     >
                       <div className="font-medium">{ast.assistant_name}</div>
                     </button>
@@ -279,18 +275,10 @@ export default function ChatPage() {
             Select an organization in Settings → General to scope document search.
           </p>
         )}
-        {hasHydrated && activeOrganizationId && indexedDocCount === 0 && (
+
+        {selectedAssistant && (!selectedAssistant.tools || selectedAssistant.tools.length === 0) && (
           <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg px-3 py-2">
-            No indexed documents yet.{' '}
-            <Link href="/documents" className="underline font-medium">
-              Upload a file
-            </Link>{' '}
-            before asking document questions.
-          </p>
-        )}
-        {selectedAssistant && !hasRag && (
-          <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg px-3 py-2">
-            This assistant does not have <code>rag_search</code> — add it in Assistants → Detail → Tools.
+            This assistant has no tools configured. Add tools in Assistants → Detail → Tools.
           </p>
         )}
 
@@ -311,21 +299,7 @@ export default function ChatPage() {
               <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md text-center text-sm">
                 Start a conversation with your selected assistant to get help, answer questions, or accomplish tasks.
               </p>
-              {hasRag && indexedDocCount > 0 && (
-                <div className="flex flex-wrap justify-center gap-2 max-w-lg">
-                  {SUGGESTED_QUESTIONS.map((q) => (
-                    <button
-                      key={q}
-                      type="button"
-                      onClick={() => onSuggestedQuestion(q)}
-                      disabled={sendMutation.isPending || !activeOrganizationId}
-                      className="cursor-pointer text-xs px-3 py-2 rounded-full border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:border-blue-300 dark:hover:border-blue-500/30 text-gray-700 dark:text-gray-300 transition-colors disabled:opacity-50"
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
-              )}
+
             </div>
           ) : (
             messages.map((message) => (
@@ -334,13 +308,12 @@ export default function ChatPage() {
                 className={`flex gap-3 max-w-[85%] ${message.role === 'USER' ? 'ml-auto flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2`}
               >
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-md dark:shadow-lg ${
-                    message.role === 'USER'
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-md dark:shadow-lg ${message.role === 'USER'
                       ? 'bg-gradient-to-br from-blue-500 to-purple-600'
                       : message.isError
                         ? 'bg-red-500/10 border border-red-500/30'
                         : 'bg-black/5 dark:bg-white/10 backdrop-blur-md border border-black/10 dark:border-white/10'
-                  }`}
+                    }`}
                 >
                   {message.role === 'USER' ? (
                     <User className="w-4 h-4 text-white" />
@@ -349,13 +322,12 @@ export default function ChatPage() {
                   )}
                 </div>
                 <div
-                  className={`px-5 py-3.5 text-sm rounded-3xl shadow-sm dark:shadow-lg border max-w-full ${
-                    message.role === 'USER'
+                  className={`px-5 py-3.5 text-sm rounded-3xl shadow-sm dark:shadow-lg border max-w-full ${message.role === 'USER'
                       ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-tr-sm border-blue-500/50 shadow-blue-500/20'
                       : message.isError
                         ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-300 rounded-tl-sm'
                         : 'bg-white/50 dark:bg-white/5 backdrop-blur-xl border-black/10 dark:border-white/10 text-gray-800 dark:text-gray-200 rounded-tl-sm'
-                  }`}
+                    }`}
                 >
                   {message.role === 'USER' ? (
                     <span className="whitespace-pre-wrap">{message.content}</span>
@@ -387,9 +359,7 @@ export default function ChatPage() {
               placeholder={
                 !selectedAssistant
                   ? 'Create an assistant first…'
-                  : indexedDocCount === 0
-                    ? 'Upload documents first, then ask questions…'
-                    : 'Ask about your uploaded documents…'
+                  : 'Ask a question…'
               }
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -402,11 +372,10 @@ export default function ChatPage() {
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || sendMutation.isPending || !selectedAssistant || !activeOrganizationId}
-                className={`w-9 h-9 cursor-pointer rounded-full p-0 flex items-center justify-center transition-all ${
-                  input.trim() && !sendMutation.isPending && selectedAssistant && activeOrganizationId
+                className={`w-9 h-9 cursor-pointer rounded-full p-0 flex items-center justify-center transition-all ${input.trim() && !sendMutation.isPending && selectedAssistant && activeOrganizationId
                     ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/30'
                     : 'bg-black/5 dark:bg-white/5 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                }`}
+                  }`}
               >
                 <Send className="w-4 h-4" />
               </button>
