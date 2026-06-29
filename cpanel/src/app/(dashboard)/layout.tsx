@@ -10,11 +10,11 @@ export default function DashboardLayout({
 }) {
   return (
     <StoreHydrator>
-      <div className="flex min-h-screen">
+      <div className="flex min-h-screen relative">
         <Sidebar />
-        <div className="flex-1 ml-[220px] flex flex-col min-h-screen">
+        <div className="flex-1 md:ml-[220px] flex flex-col min-h-screen w-full transition-all duration-300">
           <Header />
-          <main className="flex-1 p-8 overflow-y-auto bg-primary-bg">
+          <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-primary-bg w-full">
             <PageTransition>
               {children}
             </PageTransition>

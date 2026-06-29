@@ -183,7 +183,7 @@ export default function ConnectorPage() {
           Please select an Organization first.
         </div>
       ) : isLoadingConnectors ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6">
           {[1, 2, 3, 4, 5, 6].map(i => (
             <div key={i} className="flex flex-col bg-card-bg border border-border-color rounded-[16px] p-6">
               <div className="flex items-start justify-between mb-6">
@@ -206,7 +206,7 @@ export default function ConnectorPage() {
           ))}
         </div>
       ) : activeTab === 'connectors' && (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6">
           {filteredConnectors.map((connector: Connector, idx: number) => {
             const meta = UI_META[connector.connector_id] || UI_META['google_drive'];
             const colors = getColorClasses(meta.colorBase);
