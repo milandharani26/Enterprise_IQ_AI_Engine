@@ -10,7 +10,8 @@ import {
   ChevronDown,
   ShieldCheck,
   Globe,
-  RefreshCw
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useCredentialsHooks, Credential } from '@/hooks/api/useCredentials';
@@ -259,10 +260,28 @@ export default function CredentialsPage() {
                             </span>
                           </td>
                           <td className="px-5 py-3.5">
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
-                              <ShieldCheck className="w-3 h-3" />
-                              {cred.status}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+                                <ShieldCheck className="w-3 h-3" />
+                                {cred.status}
+                              </span>
+                              {cred.sync_status && (
+                                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border ${
+                                  cred.sync_status === 'syncing'
+                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border-blue-200 dark:border-blue-500/20'
+                                    : cred.sync_status === 'synced'
+                                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
+                                      : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border-rose-200 dark:border-rose-500/20'
+                                }`}>
+                                  {cred.sync_status === 'syncing' ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <RefreshCw className="w-3 h-3" />
+                                  )}
+                                  {cred.sync_status.charAt(0).toUpperCase() + cred.sync_status.slice(1)}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">
                             {cred.last_used_at ? new Date(cred.last_used_at).toLocaleDateString() : 'Never'}

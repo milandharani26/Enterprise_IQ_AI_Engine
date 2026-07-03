@@ -23,6 +23,7 @@ async def get_db():
 @router.post("/", response_model=ConnectorResponse)
 async def create_connector(
     conn_in: ConnectorCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
     try:
@@ -34,9 +35,40 @@ async def create_connector(
             status=conn_in.status,
             credential_id=conn_in.credential_id
         )
+        
+        # If enabled and has credentials, start sync immediately!
+        should_sync = new_conn.status == "enabled" and new_conn.credential_id is not None
+        if should_sync:
+            new_conn.sync_status = "syncing"
+
         db.add(new_conn)
         await db.commit()
         await db.refresh(new_conn)
+
+        if should_sync:
+            if new_conn.connector_id == "google_drive":
+                from engine.shared.workers.drive_sync_worker import _sync_drive_for_workspace
+                from engine.shared.models.credential_model import Credential
+                
+                cred_res = await db.execute(select(Credential).where(Credential.id == new_conn.credential_id))
+                credential = cred_res.scalars().first()
+                
+                if credential:
+                    async def run_drive_sync_bg():
+                        from engine.shared.db.session import AsyncSessionLocal
+                        async with AsyncSessionLocal() as session:
+                            conn_res = await session.execute(select(Connector).where(Connector.id == new_conn.id))
+                            fresh_conn = conn_res.scalars().first()
+                            cred_res2 = await session.execute(select(Credential).where(Credential.id == credential.id))
+                            fresh_cred = cred_res2.scalars().first()
+                            if fresh_conn and fresh_cred:
+                                await _sync_drive_for_workspace(session, fresh_conn, fresh_cred)
+                                
+                    background_tasks.add_task(run_drive_sync_bg)
+            else:
+                from engine.modules.database_connector.tasks import schedule_sync_schema
+                schedule_sync_schema(new_conn.id, new_conn.organization_id, background_tasks=background_tasks)
+
         return new_conn
     except Exception as e:
         logger.error(f"Failed to create connector: {e}")
@@ -63,6 +95,7 @@ async def list_connectors_by_org(
 async def update_connector(
     id: UUID,
     conn_in: ConnectorUpdate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
     try:
@@ -73,15 +106,52 @@ async def update_connector(
         if not connector:
             raise HTTPException(status_code=404, detail="Connector not found")
         
+        status_changed_to_enabled = False
+        cred_changed = False
+
         if conn_in.name is not None:
             connector.name = conn_in.name
         if conn_in.status is not None:
+            if conn_in.status == "enabled" and connector.status != "enabled":
+                status_changed_to_enabled = True
             connector.status = conn_in.status
         if conn_in.credential_id is not None:
+            if conn_in.credential_id != connector.credential_id:
+                cred_changed = True
             connector.credential_id = conn_in.credential_id
+        
+        should_sync = (status_changed_to_enabled or cred_changed) and connector.status == "enabled" and connector.credential_id is not None
+
+        if should_sync:
+            connector.sync_status = "syncing"
         
         await db.commit()
         await db.refresh(connector)
+
+        if should_sync:
+            if connector.connector_id == "google_drive":
+                from engine.shared.workers.drive_sync_worker import _sync_drive_for_workspace
+                from engine.shared.models.credential_model import Credential
+                
+                cred_res = await db.execute(select(Credential).where(Credential.id == connector.credential_id))
+                credential = cred_res.scalars().first()
+                
+                if credential:
+                    async def run_drive_sync_bg():
+                        from engine.shared.db.session import AsyncSessionLocal
+                        async with AsyncSessionLocal() as session:
+                            conn_res = await session.execute(select(Connector).where(Connector.id == connector.id))
+                            fresh_conn = conn_res.scalars().first()
+                            cred_res2 = await session.execute(select(Credential).where(Credential.id == credential.id))
+                            fresh_cred = cred_res2.scalars().first()
+                            if fresh_conn and fresh_cred:
+                                await _sync_drive_for_workspace(session, fresh_conn, fresh_cred)
+                                
+                    background_tasks.add_task(run_drive_sync_bg)
+            else:
+                from engine.modules.database_connector.tasks import schedule_sync_schema
+                schedule_sync_schema(connector.id, connector.organization_id, background_tasks=background_tasks)
+
         return connector
     except HTTPException:
         raise
