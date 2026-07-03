@@ -18,6 +18,7 @@ export interface Credential {
     host?: string;
     username?: string;
   };
+  sync_status?: string;
 }
 
 export const useCredentialsHooks = () => {

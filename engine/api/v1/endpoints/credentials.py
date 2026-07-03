@@ -3,7 +3,7 @@ import logging
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -22,6 +22,62 @@ from engine.shared.schemas.credential_schema import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+async def _auto_bind_and_sync(db: AsyncSession, credential: Credential, background_tasks: BackgroundTasks):
+    from engine.shared.models.connector_model import Connector
+    provider_lower = credential.provider.lower()
+    
+    # Find the connector for this organization and provider (Google maps to google_drive, others are 1:1)
+    if provider_lower == "google":
+        stmt = select(Connector).where(
+            Connector.organization_id == credential.organization_id,
+            Connector.connector_id == "google_drive"
+        )
+    else:
+        stmt = select(Connector).where(
+            Connector.organization_id == credential.organization_id,
+            Connector.provider.ilike(credential.provider)
+        )
+        
+    conn_res = await db.execute(stmt)
+    connector = conn_res.scalars().first()
+    
+    if connector:
+        connector.credential_id = credential.id
+        connector.status = "enabled"
+        connector.sync_status = "syncing"
+        await db.commit()
+        
+        if connector.connector_id == "google_drive":
+            from engine.shared.workers.drive_sync_worker import _sync_drive_for_workspace
+            
+            async def run_drive_sync_bg():
+                from engine.shared.db.session import AsyncSessionLocal
+                async with AsyncSessionLocal() as session:
+                    conn_res2 = await session.execute(select(Connector).where(Connector.id == connector.id))
+                    fresh_conn = conn_res2.scalars().first()
+                    cred_res2 = await session.execute(select(Credential).where(Credential.id == credential.id))
+                    fresh_cred = cred_res2.scalars().first()
+                    if fresh_conn and fresh_cred:
+                        await _sync_drive_for_workspace(session, fresh_conn, fresh_cred)
+                        
+            background_tasks.add_task(run_drive_sync_bg)
+        else:
+            from engine.modules.database_connector.tasks import schedule_sync_schema
+            schedule_sync_schema(connector.id, connector.organization_id, background_tasks=background_tasks)
+
+
+async def _attach_sync_status(db: AsyncSession, credential: Credential):
+    from engine.shared.models.connector_model import Connector
+    conn_res = await db.execute(select(Connector).where(Connector.credential_id == credential.id))
+    connector = conn_res.scalars().first()
+    if connector:
+        credential.sync_status = connector.sync_status
+    else:
+        credential.sync_status = None
+
+
 
 
 async def get_db():
@@ -204,7 +260,9 @@ async def regenerate_google_oauth_url(credential_id: UUID, db: AsyncSession = De
 
 @router.post("/oauth/google/exchange", response_model=CredentialResponse)
 async def exchange_google_oauth_code(
-    req: OAuthExchangeRequest, db: AsyncSession = Depends(get_db)
+    req: OAuthExchangeRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
 ):
     try:
         credential_id = UUID(req.state)
@@ -275,6 +333,10 @@ async def exchange_google_oauth_code(
         await db.commit()
         await db.refresh(cred)
 
+        # Auto-map active credentials to the organization's connector and start sync
+        await _auto_bind_and_sync(db, cred, background_tasks)
+        await _attach_sync_status(db, cred)
+
         return cred
 
     except Exception as e:
@@ -284,7 +346,9 @@ async def exchange_google_oauth_code(
 
 @router.post("/", response_model=CredentialResponse)
 async def create_credential(
-    cred_in: CredentialCreate, db: AsyncSession = Depends(get_db)
+    cred_in: CredentialCreate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
 ):
     try:
         new_cred = Credential(
@@ -297,6 +361,12 @@ async def create_credential(
         db.add(new_cred)
         await db.commit()
         await db.refresh(new_cred)
+
+        # Auto-map to connector and start sync immediately!
+        if new_cred.status == "Active":
+            await _auto_bind_and_sync(db, new_cred, background_tasks)
+        await _attach_sync_status(db, new_cred)
+
         return new_cred
     except Exception as e:
         logger.error(f"Failed to create credential: {e}")
@@ -312,6 +382,8 @@ async def list_credentials_by_org(
             select(Credential).where(Credential.organization_id == organization_id)
         )
         creds = result.scalars().all()
+        for cred in creds:
+            await _attach_sync_status(db, cred)
         return creds
     except Exception as e:
         logger.error(f"Failed to fetch credentials: {e}")

@@ -92,14 +92,17 @@ async def run_drive_sync_poll():
                 # Find all enabled google_drive connectors with a valid credential mapped
                 result = await session.execute(
                     select(Connector)
-                    .where(Connector.connector_id == 'google_drive', Connector.status == 'enabled', Connector.credential_id.isnot(None))
+                    .where(Connector.connector_id == 'google_drive', Connector.credential_id.isnot(None))
                 )
                 connectors = result.scalars().all()
                 
                 for connector in connectors:
                     # Fetch the credential
                     cred_res = await session.execute(
-                        select(Credential).where(Credential.id == connector.credential_id)
+                        select(Credential).where(
+                            Credential.id == connector.credential_id,
+                            Credential.status == "Active"
+                        )
                     )
                     credential = cred_res.scalars().first()
                     
