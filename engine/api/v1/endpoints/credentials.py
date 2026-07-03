@@ -149,7 +149,27 @@ import os
 from google_auth_oauthlib.flow import Flow
 import json
 
-GOOGLE_SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+GOOGLE_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/drive.readonly",
+    # Workspace OAuth clients may include Calendar on the consent screen.
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.readonly",
+]
+
+
+def _configure_oauthlib_env(redirect_uri: str | None) -> None:
+    """Local/dev OAuth helpers for google-auth-oauthlib."""
+    if redirect_uri and (
+        "localhost" in redirect_uri
+        or "127.0.0.1" in redirect_uri
+        or redirect_uri.startswith("http://192.168.")
+    ):
+        os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+    # Google may return extra scopes (openid, calendar, etc.) vs. the auth request.
+    os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 
 
 @router.post("/oauth/google/generate-url", response_model=OAuthGenerateUrlResponse)
@@ -187,13 +207,15 @@ async def generate_google_oauth_url(
             }
         }
 
+        _configure_oauthlib_env(req.redirect_uri)
+
         flow = Flow.from_client_config(client_config, scopes=GOOGLE_SCOPES)
         flow.redirect_uri = req.redirect_uri
 
         auth_url, _ = flow.authorization_url(
             state=state,
             access_type="offline",
-            include_granted_scopes="true",
+            include_granted_scopes="false",
             prompt="consent",
         )
 
@@ -235,13 +257,15 @@ async def regenerate_google_oauth_url(credential_id: UUID, db: AsyncSession = De
             }
         }
         
+        _configure_oauthlib_env(redirect_uri)
+
         flow = Flow.from_client_config(client_config, scopes=GOOGLE_SCOPES)
         flow.redirect_uri = redirect_uri
-        
+
         auth_url, _ = flow.authorization_url(
             state=str(cred.id),
             access_type="offline",
-            include_granted_scopes="true",
+            include_granted_scopes="false",
             prompt="consent",
         )
         
@@ -290,9 +314,7 @@ async def exchange_google_oauth_code(
             }
         }
 
-        # Allow insecure transport for localhost redirects
-        if redirect_uri and "localhost" in redirect_uri:
-            os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+        _configure_oauthlib_env(redirect_uri)
 
         flow = Flow.from_client_config(client_config, scopes=GOOGLE_SCOPES)
         flow.redirect_uri = redirect_uri
