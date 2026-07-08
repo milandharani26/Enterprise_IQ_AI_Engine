@@ -12,7 +12,6 @@ from engine.modules.assistant.tools.exceptions import LLMInitializationError
 
 logger = logging.getLogger(__name__)
 
-
 def initialize_llm(llm_config: Optional[Dict[str, Any]] = None) -> BaseChatModel:
     if llm_config is None:
         llm_config = {}
