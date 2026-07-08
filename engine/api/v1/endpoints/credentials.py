@@ -422,6 +422,15 @@ async def delete_credential(credential_id: UUID, db: AsyncSession = Depends(get_
         if not cred:
             raise HTTPException(status_code=404, detail="Credential not found")
 
+        # Delete any connectors associated with this credential to trigger cascades
+        from engine.shared.models.connector_model import Connector
+        conn_stmt = select(Connector).where(Connector.credential_id == credential_id)
+        conn_res = await db.execute(conn_stmt)
+        connectors = conn_res.scalars().all()
+        for conn in connectors:
+            logger.info(f"Deleting connector '{conn.name}' (ID: {conn.id}) due to credential deletion.")
+            await db.delete(conn)
+
         await db.delete(cred)
         await db.commit()
     except HTTPException:
