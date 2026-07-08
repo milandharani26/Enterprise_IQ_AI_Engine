@@ -30,6 +30,7 @@ _SHARED_LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
 _CONSOLE_FORMAT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
     "<level>{level: <8}</level> | "
+    "<dim>{extra[request_id]!s:<12}</dim> | "
     "<cyan>{extra[event]!s:<24}</cyan> | "
     "<level>{message}</level>"
 )
@@ -45,6 +46,28 @@ _TOOL_EVENTS = (
 def _tool_execution_filter(record: dict) -> bool:
     msg = record["message"].strip()
     return msg.startswith("{") and any(evt in msg for evt in _TOOL_EVENTS)
+
+
+import logging
+
+
+class InterceptHandler(logging.Handler):
+    """Logs standard library logging messages to Loguru."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        # Get corresponding Loguru level if it exists
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+
+        # Find caller from where originated the logged message
+        frame, depth = logging.currentframe(), 2
+        while frame and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
 class LoggerConfig:
@@ -76,36 +99,22 @@ class LoggerConfig:
             filter=ensure_console_defaults,
         )
 
+        # Single JSON log file for all application, request, tool, and error logs
         logger.add(
-            self.log_dir / "app.json.log",
+            _SHARED_LOGS_DIR / "app.json.log",
             level=log_level,
-            rotation="20 MB",
-            retention="14 days",
-            compression="zip",
-            serialize=False,
-            format=json_formatter,
-        )
-
-        # Tool execution-only stream: raw JSON messages emitted by tools.
-        logger.add(
-            self.log_dir / "tool_execution.json.log",
-            level="INFO",
-            rotation="20 MB",
-            retention="14 days",
-            compression="zip",
-            serialize=False,
-            format="{message}",
-            filter=_tool_execution_filter,
-        )
-
-        logger.add(
-            self.log_dir / "error.json.log",
-            level="ERROR",
-            rotation="20 MB",
+            rotation="50 MB",
             retention="30 days",
             compression="zip",
             serialize=False,
             format=json_formatter,
         )
+
+        # Route standard library logs to Loguru
+        logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+        for logger_name in ("uvicorn", "uvicorn.access", "uvicorn.error", "fastapi", "sqlalchemy"):
+            logging_logger = logging.getLogger(logger_name)
+            logging_logger.handlers = [InterceptHandler()]
+            logging_logger.propagate = False
 
         return logger
