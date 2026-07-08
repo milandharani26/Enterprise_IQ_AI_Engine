@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Trash2, ShieldOff, PlayCircle, Bot, Blocks, Shield, FileCheck, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, ShieldOff, PlayCircle, Bot, Blocks, Shield, FileCheck, Loader2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -49,8 +49,33 @@ export default function AssistantDetailsClient() {
   const [isDisableModalOpen, setIsDisableModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [previewResult, setPreviewResult] = useState<{ compiled_prompt: string; estimated_tokens: number; status: string; warnings: string[] } | null>(null);
-  const [viewingGuardrail, setViewingGuardrail] = useState<any | null>(null);
+  const [editingToolIdx, setEditingToolIdx] = useState<number | null>(null);
+  const [editingGuardrailIdx, setEditingGuardrailIdx] = useState<number | null>(null);
   const [viewingTool, setViewingTool] = useState<any | null>(null);
+  const [viewingToolIdx, setViewingToolIdx] = useState<number | null>(null);
+  const [viewingGuardrail, setViewingGuardrail] = useState<any | null>(null);
+  const [viewingGuardrailIdx, setViewingGuardrailIdx] = useState<number | null>(null);
+
+  const handleEditTool = (tool: any, index: number) => {
+    setNewTool({
+      tool_id: tool.tool_id || tool.id,
+      credential_id: tool.credential_id || tool.credential || 'none',
+      usage_instructions: tool.usage_instructions || tool.instructions || ''
+    });
+    setEditingToolIdx(index);
+    setIsToolModalOpen(true);
+  };
+
+  const handleEditGuardrail = (guardrail: any, index: number) => {
+    setNewGuardrail({
+      type: guardrail.type || '',
+      instructions: guardrail.instructions || '',
+      enforcement: guardrail.enforcement || 'block',
+      enabled: guardrail.enabled !== undefined ? guardrail.enabled : true
+    });
+    setEditingGuardrailIdx(index);
+    setIsGuardrailModalOpen(true);
+  };
 
   const [formData, setFormData] = useState<{
     assistant_name: string;
@@ -267,7 +292,11 @@ export default function AssistantDetailsClient() {
             <div className="grid grid-cols-2 gap-4">
               <div
                 className="flex flex-col items-center justify-center p-6 bg-tertiary-bg border border-dashed border-border-color rounded-2xl hover:border-accent-primary hover:bg-accent-primary/5 cursor-pointer transition-all group"
-                onClick={() => setIsToolModalOpen(true)}
+                onClick={() => {
+                  setNewTool({ tool_id: 'rag_search', credential_id: 'none', usage_instructions: '' });
+                  setEditingToolIdx(null);
+                  setIsToolModalOpen(true);
+                }}
               >
                 <div className="w-10 h-10 rounded-full bg-card-bg shadow-sm flex items-center justify-center text-secondary-text group-hover:text-accent-primary mb-3 transition-colors">
                   <Blocks size={20} />
@@ -278,7 +307,11 @@ export default function AssistantDetailsClient() {
 
               <div
                 className="flex flex-col items-center justify-center p-6 bg-tertiary-bg border border-dashed border-border-color rounded-2xl hover:border-accent-success hover:bg-accent-success/5 cursor-pointer transition-all group"
-                onClick={() => setIsGuardrailModalOpen(true)}
+                onClick={() => {
+                  setNewGuardrail({ type: '', instructions: '', enforcement: 'block', enabled: true });
+                  setEditingGuardrailIdx(null);
+                  setIsGuardrailModalOpen(true);
+                }}
               >
                 <div className="w-10 h-10 rounded-full bg-card-bg shadow-sm flex items-center justify-center text-secondary-text group-hover:text-accent-success mb-3 transition-colors">
                   <Shield size={20} />
@@ -292,7 +325,7 @@ export default function AssistantDetailsClient() {
               <div className="flex flex-col gap-2 mt-2">
                 <h3 className="text-xs font-semibold text-secondary-text uppercase tracking-wider mb-1">Configured Tools</h3>
                 {formData.tools.map((t, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-card-bg border border-border-color shadow-sm group transition-all hover:border-border-hover cursor-pointer" onClick={() => setViewingTool(t)}>
+                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-card-bg border border-border-color shadow-sm group transition-all hover:border-border-hover cursor-pointer" onClick={() => { setViewingTool(t); setViewingToolIdx(idx); }}>
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-accent-primary/10 text-accent-primary rounded-lg">
                         <Blocks size={14} />
@@ -306,19 +339,32 @@ export default function AssistantDetailsClient() {
                         </span>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-accent-danger hover:bg-accent-danger/10 hover:text-accent-danger h-8 w-8 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const newTools = [...formData.tools];
-                        newTools.splice(idx, 1);
-                        setFormData({ ...formData, tools: newTools });
-                      }}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-secondary-text hover:bg-secondary-bg h-8 w-8 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditTool(t, idx);
+                        }}
+                      >
+                        <Pencil size={14} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-accent-danger hover:bg-accent-danger/10 hover:text-accent-danger h-8 w-8 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newTools = [...formData.tools];
+                          newTools.splice(idx, 1);
+                          setFormData({ ...formData, tools: newTools });
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -328,7 +374,7 @@ export default function AssistantDetailsClient() {
               <div className="flex flex-col gap-2 mt-2">
                 <h3 className="text-xs font-semibold text-secondary-text uppercase tracking-wider mb-1">Active Guardrails</h3>
                 {formData.guardrails.map((g, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-card-bg border border-border-color shadow-sm group transition-all hover:border-border-hover cursor-pointer" onClick={() => setViewingGuardrail(g)}>
+                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-card-bg border border-border-color shadow-sm group transition-all hover:border-border-hover cursor-pointer" onClick={() => { setViewingGuardrail(g); setViewingGuardrailIdx(idx); }}>
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-accent-success/10 text-accent-success rounded-lg">
                         <Shield size={14} />
@@ -338,19 +384,32 @@ export default function AssistantDetailsClient() {
                         <span className="text-xs text-muted-text capitalize">{g.enforcement} • {g.enabled ? 'Enabled' : 'Disabled'}</span>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-accent-danger hover:bg-accent-danger/10 hover:text-accent-danger h-8 w-8 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const newGuardrails = [...formData.guardrails];
-                        newGuardrails.splice(idx, 1);
-                        setFormData({ ...formData, guardrails: newGuardrails });
-                      }}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-secondary-text hover:bg-secondary-bg h-8 w-8 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditGuardrail(g, idx);
+                        }}
+                      >
+                        <Pencil size={14} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-accent-danger hover:bg-accent-danger/10 hover:text-accent-danger h-8 w-8 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newGuardrails = [...formData.guardrails];
+                          newGuardrails.splice(idx, 1);
+                          setFormData({ ...formData, guardrails: newGuardrails });
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -394,8 +453,11 @@ export default function AssistantDetailsClient() {
       {/* Add Tool Modal */}
       <Modal
         isOpen={isToolModalOpen}
-        onClose={() => setIsToolModalOpen(false)}
-        title="Add Tool"
+        onClose={() => {
+          setIsToolModalOpen(false);
+          setEditingToolIdx(null);
+        }}
+        title={editingToolIdx !== null ? "Edit Tool" : "Add Tool"}
         maxWidth="max-w-xl"
       >
         <form className="flex flex-col gap-5">
@@ -435,9 +497,11 @@ export default function AssistantDetailsClient() {
           />
           
           <Select
-            label="Credential"
+            label={`Credential${(newTool.tool_id !== 'rag_search' && newTool.tool_id !== 'emit_ui_blocks' && newTool.tool_id !== 'emi_ui_blocks') ? ' *' : ''}`}
             options={[
-              { label: 'None', value: 'none' },
+              ...((newTool.tool_id === 'rag_search' || newTool.tool_id === 'emit_ui_blocks' || newTool.tool_id === 'emi_ui_blocks')
+                ? [{ label: 'None', value: 'none' }]
+                : []),
               ...credentials
                 .filter((c: any) => {
                   const provider = c.provider?.toLowerCase() || '';
@@ -451,6 +515,11 @@ export default function AssistantDetailsClient() {
             value={newTool.credential_id}
             onChange={(e) => setNewTool({ ...newTool, credential_id: e.target.value })}
           />
+          {(newTool.tool_id !== 'rag_search' && newTool.tool_id !== 'emit_ui_blocks' && newTool.tool_id !== 'emi_ui_blocks' && (!newTool.credential_id || newTool.credential_id === 'none')) && (
+            <p className="text-xs text-accent-danger -mt-3">
+              This tool requires a configured credential. If none are listed, please create one in the Credentials tab.
+            </p>
+          )}
           <Textarea
             label="Usage instructions"
             placeholder="When and how the model should use this tool"
@@ -463,23 +532,40 @@ export default function AssistantDetailsClient() {
           </div>
 
           <div className="flex items-center justify-end gap-3 mt-2 pt-4 border-t border-border-color">
-            <Button variant="ghost" type="button" onClick={() => setIsToolModalOpen(false)}>
+            <Button variant="ghost" type="button" onClick={() => {
+              setIsToolModalOpen(false);
+              setEditingToolIdx(null);
+            }}>
               Cancel
             </Button>
             <Button variant="primary" type="button" onClick={() => {
-              if (formData.tools.some((t: any) => 
+              const isCredentialRequired = newTool.tool_id !== 'rag_search' && newTool.tool_id !== 'emit_ui_blocks' && newTool.tool_id !== 'emi_ui_blocks';
+              if (isCredentialRequired && (!newTool.credential_id || newTool.credential_id === 'none')) {
+                toast.error(`A valid credential is required for the tool '${newTool.tool_id}'.`);
+                return;
+              }
+              if (formData.tools.some((t: any, idx: number) => 
+                idx !== editingToolIdx &&
                 (t.tool_id === newTool.tool_id || t.id === newTool.tool_id) && 
                 ((t.credential_id || 'none') === (newTool.credential_id || 'none') || (t.credential || 'none') === (newTool.credential_id || 'none'))
               )) {
                 toast.error(`The tool '${newTool.tool_id}' is already configured with this credential.`);
                 return;
               }
-              setFormData({ ...formData, tools: [...formData.tools, newTool] });
+              if (editingToolIdx !== null) {
+                const newTools = [...formData.tools];
+                newTools[editingToolIdx] = newTool;
+                setFormData({ ...formData, tools: newTools });
+                toast.success('Tool updated in assistant draft. Click Save Changes to apply.');
+              } else {
+                setFormData({ ...formData, tools: [...formData.tools, newTool] });
+                toast.success('Tool added to assistant draft. Click Save Changes to apply.');
+              }
               setNewTool({ tool_id: 'rag_search', credential_id: 'none', usage_instructions: '' });
+              setEditingToolIdx(null);
               setIsToolModalOpen(false);
-              toast.success('Tool added to assistant draft. Click Save Changes to apply.');
             }}>
-              Add Tool
+              {editingToolIdx !== null ? 'Save Changes' : 'Add Tool'}
             </Button>
           </div>
         </form>
@@ -488,8 +574,11 @@ export default function AssistantDetailsClient() {
       {/* Add Guardrail Modal */}
       <Modal
         isOpen={isGuardrailModalOpen}
-        onClose={() => setIsGuardrailModalOpen(false)}
-        title="Add Guardrail"
+        onClose={() => {
+          setIsGuardrailModalOpen(false);
+          setEditingGuardrailIdx(null);
+        }}
+        title={editingGuardrailIdx !== null ? "Edit Guardrail" : "Add Guardrail"}
         maxWidth="max-w-xl"
       >
         <form className="flex flex-col gap-5">
@@ -528,7 +617,10 @@ export default function AssistantDetailsClient() {
           </div>
 
           <div className="flex items-center justify-end gap-3 mt-2 pt-4 border-t border-border-color">
-            <Button variant="ghost" type="button" onClick={() => setIsGuardrailModalOpen(false)}>
+            <Button variant="ghost" type="button" onClick={() => {
+              setIsGuardrailModalOpen(false);
+              setEditingGuardrailIdx(null);
+            }}>
               Cancel
             </Button>
             <Button variant="primary" type="button" onClick={() => {
@@ -536,12 +628,20 @@ export default function AssistantDetailsClient() {
                 toast.error('Please fill required fields.');
                 return;
               }
-              setFormData({ ...formData, guardrails: [...formData.guardrails, newGuardrail] });
+              if (editingGuardrailIdx !== null) {
+                const newGuardrails = [...formData.guardrails];
+                newGuardrails[editingGuardrailIdx] = newGuardrail;
+                setFormData({ ...formData, guardrails: newGuardrails });
+                toast.success('Guardrail updated in assistant draft. Click Save Changes to apply.');
+              } else {
+                setFormData({ ...formData, guardrails: [...formData.guardrails, newGuardrail] });
+                toast.success('Guardrail added to assistant draft. Click Save Changes to apply.');
+              }
               setNewGuardrail({ type: '', instructions: '', enforcement: 'block', enabled: true });
+              setEditingGuardrailIdx(null);
               setIsGuardrailModalOpen(false);
-              toast.success('Guardrail added to assistant draft. Click Save Changes to apply.');
             }}>
-              Add Guardrail
+              {editingGuardrailIdx !== null ? 'Save Changes' : 'Add Guardrail'}
             </Button>
           </div>
         </form>
@@ -566,7 +666,10 @@ export default function AssistantDetailsClient() {
       {/* View Guardrail Modal */}
       <Modal
         isOpen={!!viewingGuardrail}
-        onClose={() => setViewingGuardrail(null)}
+        onClose={() => {
+          setViewingGuardrail(null);
+          setViewingGuardrailIdx(null);
+        }}
         title="Guardrail Details"
         maxWidth="max-w-xl"
       >
@@ -597,7 +700,10 @@ export default function AssistantDetailsClient() {
               </div>
             </div>
             <div className="flex items-center justify-end mt-2 pt-4 border-t border-border-color">
-              <Button variant="secondary" onClick={() => setViewingGuardrail(null)}>
+              <Button variant="secondary" onClick={() => {
+                setViewingGuardrail(null);
+                setViewingGuardrailIdx(null);
+              }}>
                 Close
               </Button>
             </div>
@@ -608,7 +714,10 @@ export default function AssistantDetailsClient() {
       {/* View Tool Modal */}
       <Modal
         isOpen={!!viewingTool}
-        onClose={() => setViewingTool(null)}
+        onClose={() => {
+          setViewingTool(null);
+          setViewingToolIdx(null);
+        }}
         title="Tool Details"
         maxWidth="max-w-xl"
       >
@@ -635,13 +744,17 @@ export default function AssistantDetailsClient() {
               </div>
             </div>
             <div className="flex items-center justify-end mt-2 pt-4 border-t border-border-color">
-              <Button variant="secondary" onClick={() => setViewingTool(null)}>
+              <Button variant="secondary" onClick={() => {
+                setViewingTool(null);
+                setViewingToolIdx(null);
+              }}>
                 Close
               </Button>
             </div>
           </div>
         )}
       </Modal>
+
 
       {/* Disable/Enable Confirmation Modal */}
       <Modal
