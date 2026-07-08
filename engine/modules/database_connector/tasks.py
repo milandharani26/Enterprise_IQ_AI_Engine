@@ -1,9 +1,9 @@
-import logging
 from uuid import UUID
 
 from engine.pipelines.tasks.celery_app import celery_app
 
-logger = logging.getLogger(__name__)
+from shared.logging import get_logger
+logger = get_logger("database_tasks")
 
 @celery_app.task(bind=True, max_retries=3)
 def sync_schema_task(self, connection_id: str, organization_id: str):
