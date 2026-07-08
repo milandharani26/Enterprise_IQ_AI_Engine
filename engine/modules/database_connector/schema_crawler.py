@@ -1,4 +1,3 @@
-import logging
 from uuid import UUID
 from typing import Dict, List, Any
 
@@ -18,7 +17,8 @@ from engine.shared.models.connector_model import Connector
 from engine.shared.models.credential_model import Credential
 from engine.pipelines.ingestion.services.embedding_service import EmbeddingService
 
-logger = logging.getLogger(__name__)
+from shared.logging import get_logger
+logger = get_logger("schema_crawler")
 
 class SchemaCrawlerService:
     async def sync_database_schema(self, db: AsyncSession, connection_id: UUID, org_id: UUID):
@@ -26,23 +26,39 @@ class SchemaCrawlerService:
         logger.info(f"Starting schema sync for connection {connection_id}")
         
         # 1. Fetch connection details
+        logger.info(f"Retrieving database connection details for connector ID: {connection_id}")
         stmt = select(Connector).where(
             Connector.id == connection_id,
             Connector.organization_id == org_id
         )
-        result = await db.execute(stmt)
-        conn_obj = result.scalars().first()
+        try:
+            result = await db.execute(stmt)
+            conn_obj = result.scalars().first()
+        except Exception as e:
+            logger.error(f"Failed to query database connector {connection_id}: {e}")
+            return
         
         if not conn_obj:
-            logger.error(f"Connection {connection_id} not found or deleted.")
+            logger.error(f"Connection {connection_id} not found or deleted in workspace connectors.")
             return
 
-        cred_stmt = select(Credential).where(Credential.id == conn_obj.credential_id)
-        cred_result = await db.execute(cred_stmt)
-        cred_obj = cred_result.scalars().first()
+        logger.info(f"Retrieving credentials for connector '{conn_obj.name}' (Credential ID: {conn_obj.credential_id})")
+        try:
+            cred_stmt = select(Credential).where(Credential.id == conn_obj.credential_id)
+            cred_result = await db.execute(cred_stmt)
+            cred_obj = cred_result.scalars().first()
+        except Exception as e:
+            logger.error(f"Failed to query credentials for credential ID {conn_obj.credential_id}: {e}")
+            conn_obj.sync_status = "failed"
+            conn_obj.sync_error = f"Failed to retrieve credentials: {e}"
+            await db.commit()
+            return
         
         if not cred_obj:
-            logger.error(f"Credential {conn_obj.credential_id} not found for connection.")
+            logger.error(f"Credential record {conn_obj.credential_id} not found for connector '{conn_obj.name}'.")
+            conn_obj.sync_status = "failed"
+            conn_obj.sync_error = f"Credentials record {conn_obj.credential_id} not found."
+            await db.commit()
             return
 
         conn_obj.sync_status = "syncing"
@@ -50,6 +66,10 @@ class SchemaCrawlerService:
 
         auth_data = cred_obj.auth_data
         database_type = conn_obj.connector_id
+        logger.info(
+            f"Retrieved connection details. Connector Name: '{conn_obj.name}', Database Type: {database_type}, "
+            f"Host: {auth_data.get('host')}, Port: {auth_data.get('port')}, Database Name: {auth_data.get('database')}"
+        )
 
         try:
             # 2. Extract metadata based on DB type
@@ -162,8 +182,19 @@ class SchemaCrawlerService:
             })
 
         # Batch embed
+        logger.info(f"Embedding schema structures ({len(all_texts)} texts)...")
         pipeline_embed_svc = EmbeddingService()
-        vectors = await pipeline_embed_svc.embed_chunks(all_texts)
+        try:
+            vectors = await pipeline_embed_svc.embed_chunks(all_texts)
+            logger.info("Successfully generated embeddings for schema structures.")
+        except Exception as e:
+            err_msg = str(e)
+            if "rate limit" in err_msg.lower() or "429" in err_msg or "token" in err_msg.lower() or "limit" in err_msg.lower():
+                logger.error(f"Embedding schema chunks failed due to rate/token limit: {e}")
+                raise Exception(f"Failed to generate schema embeddings (Rate/Token limit reached on embedding service): {e}")
+            else:
+                logger.error(f"Failed to generate schema embeddings: {e}")
+                raise Exception(f"Failed to generate schema embeddings: {e}")
 
         for i, vec in enumerate(vectors):
             meta = embed_defs[i]
@@ -186,17 +217,35 @@ class SchemaCrawlerService:
     async def _crawl_postgres(self, auth_data: dict):
         """Connects to PostgreSQL and extracts schema metadata."""
         schema_filter = auth_data.get('schema') or 'public'
+        host = auth_data.get('host')
+        port = auth_data.get('port')
+        database = auth_data.get('database')
+        username = auth_data.get('username')
+        
+        logger.info(f"Connecting to PostgreSQL for schema crawling: host={host}, port={port}, database={database}, user={username}, schema={schema_filter}")
         
         try:
             conn = await asyncpg.connect(
-                user=auth_data.get('username'),
+                user=username,
                 password=auth_data.get('password'),
-                database=auth_data.get('database'),
-                host=auth_data.get('host'),
-                port=int(auth_data.get('port')),
+                database=database,
+                host=host,
+                port=int(port),
             )
+            logger.info("Successfully established connection to PostgreSQL server for schema crawling.")
         except Exception as e:
-            raise Exception(f"Failed to connect to PostgreSQL: {e}")
+            err_name = type(e).__name__
+            err_msg = str(e).lower()
+            logger.error(f"Failed to connect to PostgreSQL during crawl: class={err_name}, error={e}")
+            
+            if "password" in err_msg or "auth" in err_msg or "access denied" in err_msg or "invalidauthorization" in err_msg.lower():
+                raise Exception(f"PostgreSQL authentication failed for user '{username}': check your username and password.")
+            elif "database" in err_msg and ("unknown" in err_msg or "does not exist" in err_msg or "invalidcatalogname" in err_msg.lower()):
+                raise Exception(f"Database '{database}' does not exist on PostgreSQL server.")
+            elif "connection refused" in err_msg or "cant_connect" in err_msg or "conn" in err_msg or "host" in err_msg or "unreachable" in err_msg:
+                raise Exception(f"Failed to connect to PostgreSQL server at {host}:{port}. Verify host and port.")
+            else:
+                raise Exception(f"Failed to connect to PostgreSQL: {e}")
 
         try:
             # Fetch Tables with descriptions
@@ -297,17 +346,35 @@ class SchemaCrawlerService:
         """Connects to MySQL and extracts schema metadata."""
         import aiomysql
         schema_filter = auth_data.get('schema') or auth_data.get('database')
+        host = auth_data.get('host')
+        port = auth_data.get('port')
+        database = auth_data.get('database')
+        username = auth_data.get('username')
+        
+        logger.info(f"Connecting to MySQL for schema crawling: host={host}, port={port}, database={database}, user={username}, schema_filter={schema_filter}")
         
         try:
             conn = await aiomysql.connect(
-                host=auth_data.get('host'),
-                port=int(auth_data.get('port')),
-                user=auth_data.get('username'),
+                host=host,
+                port=int(port),
+                user=username,
                 password=auth_data.get('password'),
-                db=auth_data.get('database'),
+                db=database,
             )
+            logger.info("Successfully established connection to MySQL server for schema crawling.")
         except Exception as e:
-            raise Exception(f"Failed to connect to MySQL: {e}")
+            err_name = type(e).__name__
+            err_msg = str(e).lower()
+            logger.error(f"Failed to connect to MySQL during crawl: class={err_name}, error={e}")
+            
+            if "password" in err_msg or "auth" in err_msg or "access denied" in err_msg or "accessdenied" in err_msg.lower():
+                raise Exception(f"MySQL authentication failed for user '{username}': check your username and password.")
+            elif "database" in err_msg and ("unknown" in err_msg or "does not exist" in err_msg or "bad_db" in err_msg.lower()):
+                raise Exception(f"Database '{database}' does not exist on MySQL server.")
+            elif "connection refused" in err_msg or "cant_connect" in err_msg or "conn" in err_msg or "host" in err_msg or "unreachable" in err_msg:
+                raise Exception(f"Failed to connect to MySQL server at {host}:{port}. Verify host and port.")
+            else:
+                raise Exception(f"Failed to connect to MySQL: {e}")
 
         try:
             async with conn.cursor(aiomysql.DictCursor) as cur:
