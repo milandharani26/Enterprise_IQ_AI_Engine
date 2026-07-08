@@ -145,7 +145,7 @@ export default function ServiceTokenPage() {
                 <span className="text-[10px] font-bold text-secondary-text mt-1.5 uppercase tracking-wider">Revoked</span>
               </div>
             </div>
-            <Button variant="primary" size="lg" className="gap-2 shadow-lg shadow-accent-primary/20 rounded-xl" onClick={() => setIsCreateModalOpen(true)}>
+            <Button variant="primary" size="lg" data-tour="service-tokens-create-button" className="gap-2 shadow-lg shadow-accent-primary/20 rounded-xl" onClick={() => setIsCreateModalOpen(true)}>
               <Plus size={18} strokeWidth={2.5} />
               Create Token
             </Button>
@@ -156,7 +156,7 @@ export default function ServiceTokenPage() {
       {/* Sleek List Container */}
       <div className="flex flex-col flex-1 mt-4">
         {/* Modern Tabs */}
-        <div className="flex items-center gap-2 mb-6 border-b border-border-color pb-px">
+        <div data-tour="service-tokens-filters" className="flex items-center gap-2 mb-6 border-b border-border-color pb-px">
           {['all', 'active', 'revoked'].map((f) => (
             <button
               key={f}
@@ -176,7 +176,7 @@ export default function ServiceTokenPage() {
         </div>
 
         {/* Minimalist Edge-to-Edge Table List */}
-        <div className="bg-card-bg border border-border-color rounded-2xl overflow-x-auto shadow-sm flex-1">
+        <div data-tour="service-tokens-list" className="bg-card-bg border border-border-color rounded-2xl overflow-x-auto shadow-sm flex-1">
           <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
               <tr className="bg-secondary-bg/30 border-b border-border-color">

@@ -155,7 +155,7 @@ export default function ConnectorPage() {
       </div>
 
       {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row items-center gap-4 bg-secondary-bg p-2 rounded-xl border border-border-color">
+      <div data-tour="connectors-filters" className="flex flex-col sm:flex-row items-center gap-4 bg-secondary-bg p-2 rounded-xl border border-border-color">
         <div className="flex-1 w-full relative">
           <Input
             placeholder="Search connectors by name or ID..."
@@ -207,7 +207,7 @@ export default function ConnectorPage() {
           ))}
         </div>
       ) : activeTab === 'connectors' && (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6">
+        <div data-tour="connectors-list" className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6">
           {filteredConnectors.map((connector: Connector, idx: number) => {
             const meta = UI_META[connector.connector_id] || UI_META['google_drive'];
             const colors = getColorClasses(meta.colorBase);

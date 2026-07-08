@@ -8,7 +8,7 @@ export default function GeneralSettingsPage() {
     <div className="max-w-[600px]">
       <h1 className="m-0 mb-6 text-2xl font-bold text-primary-text">General Settings</h1>
       
-      <Card className="bg-secondary-bg">
+      <Card data-tour="settings-profile-card" className="bg-secondary-bg">
         <CardHeader>
           <CardTitle>Profile Information</CardTitle>
         </CardHeader>

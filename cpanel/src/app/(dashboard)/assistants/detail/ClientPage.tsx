@@ -206,7 +206,7 @@ export default function AssistantDetailsClient() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div data-tour="assistant-details-actions" className="flex flex-wrap items-center gap-3">
           <Button variant="ghost" className="gap-2 text-secondary-text hover:text-primary-text" onClick={handlePreviewPrompt} disabled={previewMutation.isPending}>
             {previewMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <FileCheck size={16} />}
             Check prompt
@@ -233,7 +233,7 @@ export default function AssistantDetailsClient() {
         <div className="w-full lg:w-[450px] xl:w-[500px] flex flex-col gap-10 lg:overflow-y-auto pr-2 lg:pb-10 custom-scrollbar shrink-0">
 
           {/* Section: Basic Identity */}
-          <section className="flex flex-col gap-5">
+          <section data-tour="assistant-details-identity" className="flex flex-col gap-5">
             <div>
               <h2 className="text-sm font-semibold text-primary-text uppercase tracking-wider mb-1">Basic Identity</h2>
               <p className="text-xs text-secondary-text">Core details defining this assistant.</p>
@@ -258,7 +258,7 @@ export default function AssistantDetailsClient() {
           <hr className="border-border-color" />
 
           {/* Section: Extensions (Tools & Guardrails) */}
-          <section className="flex flex-col gap-5">
+          <section data-tour="assistant-details-capabilities" className="flex flex-col gap-5">
             <div>
               <h2 className="text-sm font-semibold text-primary-text uppercase tracking-wider mb-1">Capabilities & Security</h2>
               <p className="text-xs text-secondary-text">Extend actions and enforce rules.</p>
@@ -360,7 +360,7 @@ export default function AssistantDetailsClient() {
         </div>
 
         {/* Right Column: System Instructions (Prompt) */}
-        <div className="flex-1 flex flex-col bg-secondary-bg border border-border-color rounded-2xl overflow-hidden shadow-sm min-h-[400px] lg:min-h-0">
+        <div data-tour="assistant-details-instructions" className="flex-1 flex flex-col bg-secondary-bg border border-border-color rounded-2xl overflow-hidden shadow-sm min-h-[400px] lg:min-h-0">
           <div className="flex flex-col xl:flex-row xl:items-center justify-between p-4 border-b border-border-color bg-card-bg shrink-0 gap-4">
             <div>
               <h2 className="text-sm font-semibold text-primary-text tracking-wide flex items-center gap-2">
