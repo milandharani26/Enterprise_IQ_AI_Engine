@@ -57,7 +57,7 @@ export function Sidebar() {
       )}
       
       <aside className={`w-[220px] h-screen bg-secondary-bg backdrop-blur-2xl backdrop-saturate-[180%] shadow-[4px_0_24px_rgba(0,0,0,0.02)] border-r border-border-color flex flex-col fixed top-0 left-0 z-40 overflow-hidden transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <div className="h-[64px] border-b border-border-color flex items-center px-4 shrink-0">
+        <div data-tour="sidebar-logo" className="h-[64px] border-b border-border-color flex items-center px-4 shrink-0">
         <div className="flex items-center gap-4 min-w-[200px]">
           <div className="text-accent-primary shrink-0 flex items-center justify-center">
             <Bot size={20} />
@@ -68,7 +68,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 py-4 flex flex-col gap-1 overflow-y-auto overflow-x-hidden">
+      <nav data-tour="sidebar-menu" className="flex-1 py-4 flex flex-col gap-1 overflow-y-auto overflow-x-hidden">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
@@ -103,6 +103,7 @@ export function Sidebar() {
         </div>
         <Link 
           href="/settings/general" 
+          data-tour="sidebar-settings"
           className={`flex items-center gap-4 py-2 px-4 font-medium text-[13px] transition-all duration-300 ${
             pathname.startsWith('/settings') 
               ? 'bg-accent-primary/15 text-accent-primary border-r-2 border-accent-primary shadow-[inset_4px_0_15px_rgba(91,106,248,0.1)]' 
