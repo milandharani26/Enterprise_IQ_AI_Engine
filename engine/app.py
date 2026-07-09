@@ -47,8 +47,8 @@ def create_app() -> FastAPI:
     )
 
     # --- Custom Middlewares ---
-    # app.add_middleware(AuthMiddleware)
-    # app.add_middleware(RequestLoggingMiddleware)
+    from engine.shared.core.request_logging import RequestLoggingMiddleware
+    app.add_middleware(RequestLoggingMiddleware)
 
     # --- Global Exception Handlers ---
     app.add_exception_handler(AppException, GlobalExceptionHandler.handle_app_exception)

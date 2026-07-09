@@ -101,6 +101,7 @@ def json_formatter(record: dict) -> str:
 
 
 def ensure_console_defaults(record: dict) -> bool:
-    """Filter that guarantees {extra[event]} exists for the pretty console format."""
+    """Filter that guarantees {extra[event]} and {extra[request_id]} exist for the pretty console format."""
     record["extra"].setdefault("event", record["message"])
+    record["extra"].setdefault("request_id", "")
     return True
