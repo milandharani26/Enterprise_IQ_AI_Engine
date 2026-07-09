@@ -111,14 +111,14 @@ export default function AssistantsPage() {
           <h1 className="m-0 text-2xl font-bold text-primary-text tracking-tight">AI Assistants</h1>
           <p className="m-0 mt-1 text-sm text-secondary-text">Deploy and manage your autonomous agents.</p>
         </div>
-        <Button variant="primary" className="gap-2" onClick={() => setIsModalOpen(true)}>
+        <Button variant="primary" data-tour="assistants-create-button" className="gap-2" onClick={() => setIsModalOpen(true)}>
           <Plus size={18} />
           New Assistant
         </Button>
       </div>
 
       {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row items-center gap-4 bg-secondary-bg p-2 rounded-xl border border-border-color">
+      <div data-tour="assistants-filters" className="flex flex-col sm:flex-row items-center gap-4 bg-secondary-bg p-2 rounded-xl border border-border-color">
         <div className="flex-1 w-full relative">
           <Input
             placeholder="Search assistants by name, code, or tag..."
@@ -164,7 +164,7 @@ export default function AssistantsPage() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6">
+        <div data-tour="assistants-grid" className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6">
           {filteredAssistants.length > 0 ? filteredAssistants.map((assistant: Assistant, idx: number) => (
             <AssistantCard key={assistant.assistant_id || idx} assistant={assistant} index={idx} />
           )) : (

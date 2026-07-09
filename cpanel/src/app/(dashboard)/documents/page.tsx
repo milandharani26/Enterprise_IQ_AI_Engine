@@ -211,7 +211,7 @@ export default function DocumentsPage() {
         </div>
 
         {/* Filters & Search */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 bg-secondary-bg p-2 rounded-xl border border-border-color">
+        <div data-tour="documents-search-input" className="flex flex-col sm:flex-row items-center gap-4 bg-secondary-bg p-2 rounded-xl border border-border-color">
           <div className="flex-1 w-full relative">
             <Input
               placeholder="Search documents by title or ID..."
@@ -241,7 +241,7 @@ export default function DocumentsPage() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 mt-4 mb-6 flex-wrap">
+        <div data-tour="documents-tabs" className="flex items-center gap-2 mt-4 mb-6 flex-wrap">
           <button
             onClick={() => setActiveTab('local')}
             className={`px-6 py-2.5 rounded-full font-medium text-sm transition-all duration-300 cursor-pointer ${activeTab === 'local'
@@ -276,6 +276,7 @@ export default function DocumentsPage() {
               onDragLeave={() => setDragOver(false)}
               onDrop={onDrop}
               onClick={() => fileInputRef.current?.click()}
+              data-tour="documents-upload-zone"
               className={`relative cursor-pointer rounded-2xl border-2 border-dashed py-8 px-12 text-center transition-all ${dragOver
                 ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-500/10'
                 : 'border-gray-300 dark:border-white/20 hover:border-blue-400 dark:hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-white/5'

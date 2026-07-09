@@ -165,6 +165,7 @@ export default function CredentialsPage() {
           <button
             onClick={() => setIsModalOpen(true)}
             disabled={!activeOrganizationId}
+            data-tour="credentials-create-button"
             className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors shadow-sm disabled:opacity-50"
           >
             <Plus className="w-4 h-4" /> Add Credential
@@ -204,7 +205,7 @@ export default function CredentialsPage() {
             </div>
 
             {/* Credentials List */}
-            <div className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
+            <div data-tour="credentials-list" className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
               <div className="p-5 flex justify-between items-center border-b border-gray-100 dark:border-white/5">
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                   <KeyRound className="w-4 h-4 text-gray-400" />
