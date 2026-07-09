@@ -166,18 +166,6 @@ export function Tour() {
         disableBeacon: true,
       },
       {
-        target: '[data-tour="sidebar-menu"]',
-        placement: 'right' as const,
-        title: 'Navigation Menu',
-        content: 'Quickly switch between Dashboard metrics, live Chat sessions, Documents storage, AI Assistants, Data Connectors, and API Credentials.',
-      },
-      {
-        target: '[data-tour="org-switcher"]',
-        placement: 'bottom' as const,
-        title: 'Organization Switcher',
-        content: 'Toggle between different enterprise organizations and work groups dynamically.',
-      },
-      {
         target: '[data-tour="stats-grid"]',
         placement: 'bottom' as const,
         title: 'System Analytics Overview',
