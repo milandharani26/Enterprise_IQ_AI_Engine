@@ -230,6 +230,7 @@ function ChatPageContent() {
               <button
                 onClick={() => setShowAssistantPicker(!showAssistantPicker)}
                 disabled={assistantsLoading || !enabledAssistants.length}
+                data-tour="chat-assistant-picker"
                 className="flex cursor-pointer items-center gap-2 rounded-full h-8 px-3 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs text-gray-700 dark:text-gray-300 transition-colors max-w-[180px] disabled:cursor-not-allowed"
               >
                 <Bot className="w-3.5 h-3.5 shrink-0" />
@@ -261,6 +262,7 @@ function ChatPageContent() {
 
             <button
               onClick={handleNewChat}
+              data-tour="chat-clear-button"
               className="flex cursor-pointer items-center justify-center rounded-full h-8 px-4 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs text-gray-700 dark:text-gray-300 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5 mr-2" /> Clear
@@ -365,6 +367,7 @@ function ChatPageContent() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={sendMutation.isPending || !selectedAssistant || !activeOrganizationId}
+              data-tour="chat-input-textarea"
               className="min-h-[60px] max-h-[200px] w-full pr-16 pl-6 py-4 resize-none text-sm rounded-3xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 backdrop-blur-xl shadow-lg dark:shadow-2xl focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all text-gray-900 dark:text-white placeholder:text-gray-500 outline-none"
               rows={1}
             />
@@ -372,6 +375,7 @@ function ChatPageContent() {
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || sendMutation.isPending || !selectedAssistant || !activeOrganizationId}
+                data-tour="chat-send-button"
                 className={`w-9 h-9 cursor-pointer rounded-full p-0 flex items-center justify-center transition-all ${input.trim() && !sendMutation.isPending && selectedAssistant && activeOrganizationId
                     ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/30'
                     : 'bg-black/5 dark:bg-white/5 text-gray-400 dark:text-gray-500 cursor-not-allowed'

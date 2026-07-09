@@ -12,6 +12,7 @@ function GoogleOAuthCallbackContent() {
   const exchangeMutation = useExchangeGoogleOAuthCodeMutation();
   
   const [status, setStatus] = useState('Exchanging secure tokens...');
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   useEffect(() => {
     const code = searchParams.get('code');
@@ -31,8 +32,13 @@ function GoogleOAuthCallbackContent() {
             router.push('/credentials');
           }, 1500);
         },
-        onError: () => {
-          setStatus('Failed to exchange tokens. Please try again.');
+        onError: (error: any) => {
+          const detail =
+            error?.response?.data?.detail ||
+            error?.response?.data?.message ||
+            'Failed to exchange tokens. Please try again.';
+          setErrorDetail(typeof detail === 'string' ? detail : JSON.stringify(detail));
+          setStatus('Failed to connect Google Drive.');
         }
       }
     );
@@ -61,6 +67,11 @@ function GoogleOAuthCallbackContent() {
           <p className="text-gray-500 dark:text-gray-400 text-sm">
             {status}
           </p>
+          {errorDetail && (
+            <p className="text-red-600 dark:text-red-400 text-xs mt-2 break-words">
+              {errorDetail}
+            </p>
+          )}
         </div>
         
         {exchangeMutation.isError && (

@@ -2,6 +2,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { StoreHydrator } from '@/components/StoreHydrator';
 import { PageTransition } from '@/components/layout/PageTransition';
+import { Tour } from '@/components/layout/Tour';
 
 export default function DashboardLayout({
   children,
@@ -10,6 +11,7 @@ export default function DashboardLayout({
 }) {
   return (
     <StoreHydrator>
+      <Tour />
       <div className="flex min-h-screen relative">
         <Sidebar />
         <div className="flex-1 md:ml-[220px] flex flex-col min-h-screen w-full transition-all duration-300">

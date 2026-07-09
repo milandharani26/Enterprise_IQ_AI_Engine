@@ -36,7 +36,9 @@ class GoogleDriveClient:
             try:
                 # If the DB stored the exact token.json content
                 if 'json_content' in self.auth_data:
-                    self.creds = Credentials.from_authorized_user_info(self.auth_data['json_content'], SCOPES)
+                    info = self.auth_data['json_content']
+                    stored_scopes = info.get('scopes') or SCOPES
+                    self.creds = Credentials.from_authorized_user_info(info, stored_scopes)
                 else:
                     self.creds = Credentials.from_authorized_user_info(self.auth_data, SCOPES)
             except Exception as e:

@@ -20,32 +20,60 @@ def _get_settings():
 
 class EmbeddingService:
     """
-    Convert text chunks to 1536-dim embeddings via OpenAI.
+    Convert text chunks to 1536-dim embeddings via OpenAI or Gemini.
     Batch: 100 chunks per API call. Retry with exponential backoff.
     """
 
-    def __init__(self):
+    def __init__(self, org_id=None, db=None):
+        self.org_id = org_id
+        self.db = db
+        self.provider = None
+        self.model = None
+        self.batch_size = None
+        self.max_retries = None
+        self.timeout = None
+        self.dimensions = 1536
+        self._api_key = None
+        self._base_url = None
+        self._client = None
+
+    async def _ensure_resolved(self):
+        if self._client is not None:
+            return
+            
         s = _get_settings()
-        raw_provider = (
-            os.getenv("EMBEDDING_PROVIDER")
-            or os.getenv("DEFAULT_EMBEDDING_PROVIDER")
-            or getattr(s, "embedding_provider", "")
-            or getattr(s, "default_embedding_provider", "")
-            or "openai"
-        )
-        self.provider = raw_provider.strip().lower()
+        if self.org_id:
+            from engine.shared.services.credential_resolver import CredentialResolver
+            config = await CredentialResolver.get_embedding_credential(self.org_id, db=self.db)
+            self.provider = config["provider"]
+            self._api_key = config["api_key"]
+            self.model = config["model"]
+            self.dimensions = config["dimensions"]
+        else:
+            raw_provider = (
+                os.getenv("EMBEDDING_PROVIDER")
+                or os.getenv("DEFAULT_EMBEDDING_PROVIDER")
+                or getattr(s, "embedding_provider", "")
+                or getattr(s, "default_embedding_provider", "")
+                or "openai"
+            )
+            self.provider = raw_provider.strip().lower()
+            self._api_key = (
+                (os.getenv("GROQ_API_KEY") or getattr(s, "groq_api_key", "") or "")
+                if self.provider == "groq"
+                else (os.getenv("GOOGLE_API_KEY") or getattr(s, "google_api_key", "") or "")
+                if self.provider == "gemini"
+                else (os.getenv("OPENAI_API_KEY") or getattr(s, "openai_api_key", "") or "")
+            )
+            self.model = os.getenv("EMBEDDING_MODEL") or ("gemini-embedding-2" if self.provider == "gemini" else "text-embedding-3-small")
+            self.dimensions = getattr(s, "embedding_dimensions", 1536)
+
         if self.provider not in {"openai", "groq", "gemini"}:
             raise EmbeddingError(
                 f"Unsupported EMBEDDING_PROVIDER '{self.provider}'. "
                 "Supported providers: openai, groq, gemini."
             )
-        self._api_key = (
-            (os.getenv("GROQ_API_KEY") or getattr(s, "groq_api_key", "") or "")
-            if self.provider == "groq"
-            else (os.getenv("GOOGLE_API_KEY") or getattr(s, "google_api_key", "") or "")
-            if self.provider == "gemini"
-            else (os.getenv("OPENAI_API_KEY") or getattr(s, "openai_api_key", "") or "")
-        )
+
         self._base_url = (
             "https://api.groq.com/openai/v1"
             if self.provider == "groq"
@@ -53,19 +81,19 @@ class EmbeddingService:
             if self.provider == "gemini"
             else None
         )
-        self.model = os.getenv("EMBEDDING_MODEL") or ("gemini-embedding-2" if self.provider == "gemini" else "text-embedding-3-small")
         self.batch_size = getattr(s, "embedding_batch_size", 100)
         self.max_retries = getattr(s, "embedding_max_retries", 10)
         self.timeout = getattr(s, "embedding_timeout_seconds", 120)
-        self._client = None
+        
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            raise EmbeddingError("openai package required; pip install openai")
+        self._client = AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
 
     def _get_client(self):
         if self._client is None:
-            try:
-                from openai import AsyncOpenAI
-            except ImportError:
-                raise EmbeddingError("openai package required; pip install openai")
-            self._client = AsyncOpenAI(api_key=self._api_key, base_url=self._base_url)
+            raise EmbeddingError("Embedding service client is not initialized. Call _ensure_resolved first.")
         return self._client
     
     async def embed_query(self, query: str) -> List[float]:
@@ -76,6 +104,7 @@ class EmbeddingService:
         if not query or not query.strip():
             raise ValueError("Query cannot be empty")
 
+        await self._ensure_resolved()
         logger.debug("Embedding single query (length: %d)", len(query))
 
         try:
@@ -91,6 +120,7 @@ class EmbeddingService:
         batch_size: Optional[int] = None,
     ) -> List[List[float]]:
         """Embed texts in batches. Returns list of 1536-dim vectors in same order."""
+        await self._ensure_resolved()
         batch_size = batch_size or self.batch_size
         if not texts:
             return []
@@ -104,6 +134,7 @@ class EmbeddingService:
         return all_embeddings
 
     async def _embed_batch(self, texts: List[str]) -> List[List[float]]:
+        await self._ensure_resolved()
         client = self._get_client()
         for attempt in range(1, self.max_retries + 1):
             try:
@@ -112,8 +143,9 @@ class EmbeddingService:
                     "input": texts,
                     "encoding_format": "float",
                 }
-                if self.provider == "gemini":
-                    kwargs["dimensions"] = 768
+                # Standardize custom-size models to configured dimensions (1536)
+                if self.provider == "gemini" or (self.provider == "openai" and "text-embedding-3" in self.model):
+                    kwargs["dimensions"] = self.dimensions
                     
                 resp = await asyncio.wait_for(
                     client.embeddings.create(**kwargs),

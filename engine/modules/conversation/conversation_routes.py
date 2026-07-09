@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from engine.shared.core.deps import get_db
 from engine.shared.core.security import JWTService
+from engine.shared.core.logger_dep import get_request_logger
+from shared.logging import StructuredLogger
 from engine.modules.conversation.conversation_schemas import (
     NewUserMessagePayloadSchema,
     MessageResponseSchema,
@@ -27,13 +29,17 @@ async def process_chat_message(
     payload: NewUserMessagePayloadSchema,
     db: AsyncSession = Depends(get_db),
     auth: HTTPAuthorizationCredentials = Depends(security),
+    logger: StructuredLogger = Depends(get_request_logger),
 ):
     """
     Primary real-time chat execution hub.
     Receives prompt text from your frontend, logs it as a USER message,
     runs the AI core, logs the ASSISTANT response, and returns the AI reply.
     """
-    print(f"Received chat payload: {payload.dict()}")
+    logger.info(
+        f"Chat payload received for conversation {payload.conversation_id}",
+        extra={"event": "chat.received", "conversation_id": str(payload.conversation_id)},
+    )
     # 1. Extract organization_id from the Service Token if present
     if auth and auth.credentials:
         try:
@@ -58,17 +64,20 @@ async def process_chat_message(
                     except ValueError:
                         pass
         except Exception as e:
-            # Token might be invalid or a placeholder. If so, it will fall back to default organization.
-            print("Failed to decode service token:", e)
+            logger.warning(f"Failed to decode service token: {e}", extra={"event": "chat.token_decode_error"})
 
-    service = ConversationService(db)
+    service = ConversationService(db, logger)
     return await service.handle_chat_turn(payload)
 
 
 @router.get("/{conversation_id}/history", response_model=List[MessageResponseSchema])
-async def fetch_chat_history(conversation_id: UUID, db: AsyncSession = Depends(get_db)):
+async def fetch_chat_history(
+    conversation_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    logger: StructuredLogger = Depends(get_request_logger),
+):
     """Returns all message instances ordered by chronology for a given conversation session."""
-    service = ConversationService(db)
+    service = ConversationService(db, logger)
     return await service.get_conversation_history(conversation_id)
 
 

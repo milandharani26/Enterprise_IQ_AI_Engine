@@ -181,18 +181,59 @@ class DriveSearchTool(BaseTool):
                 context={"operation": "rag_initialize"},
             )
 
-    async def _embed_query(self, query: str) -> List[float]:
+    async def _embed_query(self, query: str, organization_id: Optional[str] = None) -> List[float]:
         try:
+            api_key = None
+            base_url = None
+            model = self._embedding_model
+            dimensions = 1536
+
+            if organization_id:
+                from uuid import UUID
+                from engine.shared.services.credential_resolver import CredentialResolver
+                try:
+                    org_uuid = UUID(organization_id)
+                    config = await CredentialResolver.get_embedding_credential(org_uuid)
+                    
+                    provider = config["provider"]
+                    api_key = config["api_key"]
+                    model = config["model"]
+                    dimensions = config["dimensions"]
+                    
+                    if provider == "gemini":
+                        base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+                    elif provider == "groq":
+                        base_url = "https://api.groq.com/openai/v1"
+                    else:
+                        base_url = None
+                        
+                    logger.info(
+                        f"[DriveSearchTool] Using dynamic embedding credentials for org: {organization_id} "
+                        f"(Provider: {provider}, Model: {model}, Dimensions: {dimensions})"
+                    )
+                except Exception as ex:
+                    logger.error(f"[DriveSearchTool] Error resolving credentials for org {organization_id}: {ex}. Falling back to default.")
+
+            client = self._openai_client
+            if api_key:
+                from openai import AsyncOpenAI
+                client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+            else:
+                logger.warning(
+                    f"[DriveSearchTool] Client API key is not configured for Org: {organization_id}. "
+                    "Falling back to host system API key."
+                )
+
             kwargs = {
-                "model": self._embedding_model,
+                "model": model,
                 "input": query,
                 "encoding_format": "float",
             }
-            if "gemini" in self._embedding_model:
-                kwargs["dimensions"] = 768
+            if "gemini" in model or "text-embedding-3" in model:
+                kwargs["dimensions"] = dimensions
                 
             response = await asyncio.wait_for(
-                self._openai_client.embeddings.create(**kwargs),
+                client.embeddings.create(**kwargs),
                 timeout=30,
             )
             return response.data[0].embedding
@@ -435,7 +476,7 @@ class DriveSearchTool(BaseTool):
         top_k: int,
         similarity_threshold: float,
     ) -> List[Dict[str, Any]]:
-        query_vector = await self._embed_query(query)
+        query_vector = await self._embed_query(query, organization_id)
 
         chunks = await self._vector_search(
             query_vector=query_vector,

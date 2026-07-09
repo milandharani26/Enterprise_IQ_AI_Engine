@@ -10,12 +10,13 @@ import {
   ChevronDown,
   ShieldCheck,
   Globe,
-  RefreshCw
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useCredentialsHooks, Credential } from '@/hooks/api/useCredentials';
 import { useAppStore } from '@/store/useAppStore';
-const PROVIDERS = ['Google', 'PostgreSQL', 'MySQL'];
+const PROVIDERS = ['Google', 'PostgreSQL', 'MySQL', 'Google API Key', 'OpenAI API Key'];
 
 export default function CredentialsPage() {
   const { activeOrganizationId } = useAppStore();
@@ -146,6 +147,12 @@ export default function CredentialsPage() {
       testCredentialMutation.mutate({ provider, auth_data: payloadAuthData });
     }
   };
+  const hasApiKey = (credentials || []).some(
+    (c: Credential) => (c.provider === 'Google API Key' || c.provider === 'OpenAI API Key') && c.status === 'Active'
+  );
+  const displayProviders = hasApiKey 
+    ? PROVIDERS 
+    : ['Google API Key', 'OpenAI API Key'];
 
   return (
     <div className="flex flex-col gap-8 h-full">
@@ -164,6 +171,7 @@ export default function CredentialsPage() {
           <button
             onClick={() => setIsModalOpen(true)}
             disabled={!activeOrganizationId}
+            data-tour="credentials-create-button"
             className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg font-medium bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors shadow-sm disabled:opacity-50"
           >
             <Plus className="w-4 h-4" /> Add Credential
@@ -203,7 +211,7 @@ export default function CredentialsPage() {
             </div>
 
             {/* Credentials List */}
-            <div className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
+            <div data-tour="credentials-list" className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
               <div className="p-5 flex justify-between items-center border-b border-gray-100 dark:border-white/5">
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                   <KeyRound className="w-4 h-4 text-gray-400" />
@@ -249,6 +257,8 @@ export default function CredentialsPage() {
                                 <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{cred.display_info.email}</span>
                               ) : cred.display_info?.host ? (
                                 <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{cred.display_info.username}@{cred.display_info.host}</span>
+                              ) : cred.display_info?.masked_key ? (
+                                <span className="text-xs font-mono text-gray-500 dark:text-gray-400 mt-0.5">{cred.display_info.masked_key}</span>
                               ) : null}
                             </div>
                           </td>
@@ -259,10 +269,28 @@ export default function CredentialsPage() {
                             </span>
                           </td>
                           <td className="px-5 py-3.5">
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
-                              <ShieldCheck className="w-3 h-3" />
-                              {cred.status}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+                                <ShieldCheck className="w-3 h-3" />
+                                {cred.status}
+                              </span>
+                              {cred.sync_status && (
+                                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border ${
+                                  cred.sync_status === 'syncing'
+                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border-blue-200 dark:border-blue-500/20'
+                                    : cred.sync_status === 'synced'
+                                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
+                                      : 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border-rose-200 dark:border-rose-500/20'
+                                }`}>
+                                  {cred.sync_status === 'syncing' ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <RefreshCw className="w-3 h-3" />
+                                  )}
+                                  {cred.sync_status.charAt(0).toUpperCase() + cred.sync_status.slice(1)}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">
                             {cred.last_used_at ? new Date(cred.last_used_at).toLocaleDateString() : 'Never'}
@@ -365,7 +393,7 @@ export default function CredentialsPage() {
                         className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white appearance-none focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
                       >
                         <option value="">Select provider...</option>
-                        {PROVIDERS.map(p => (
+                        {displayProviders.map(p => (
                           <option key={p} value={p}>{p}</option>
                         ))}
                       </select>
@@ -448,12 +476,32 @@ export default function CredentialsPage() {
                     </div>
                   )}
 
-                  {provider !== 'Google' && provider !== 'PostgreSQL' && provider !== 'MySQL' && provider !== '' && (
+                  {(provider === 'Google API Key' || provider === 'OpenAI API Key') && (
+                    <div className="space-y-4">
+                      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 rounded-lg text-xs leading-relaxed">
+                        ⚡ This API key will be used for AI embedding generation and LLM calls for your organization. The first API key added determines the organization's embedding provider.
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">API Key *</label>
+                        <input
+                          type="password"
+                          placeholder="Enter your API Key"
+                          value={authData.api_key || ''}
+                          onChange={(e) => updateAuthData('api_key', e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {provider !== 'Google' && provider !== 'PostgreSQL' && provider !== 'MySQL' && provider !== 'Google API Key' && provider !== 'OpenAI API Key' && provider !== '' && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">API Key / Secret</label>
                       <input
                         type="password"
                         placeholder="••••••••••••••••••••••••"
+                        value={authData.api_key || ''}
+                        onChange={(e) => updateAuthData('api_key', e.target.value)}
                         className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
                       />
                     </div>

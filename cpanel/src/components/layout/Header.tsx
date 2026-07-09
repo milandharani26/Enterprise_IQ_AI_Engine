@@ -2,16 +2,19 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
-import { Moon, Sun, ArrowLeftRight, Menu } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Moon, Sun, ArrowLeftRight, Menu, HelpCircle } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '../ui/Button';
 import { useAppStore } from '@/store/useAppStore';
 import { useOrganizationHooks } from '@/hooks/api/useOrganization';
+import { useTourStore } from '@/store/useTourStore';
 
 export function Header() {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+  const startTour = useTourStore((s) => s.startTour);
 
   const { activeOrganizationId, toggleSidebar } = useAppStore();
   const { useOrganizationsQuery } = useOrganizationHooks();
@@ -53,6 +56,7 @@ export function Header() {
         <Button 
           variant="secondary" 
           size="sm"
+          data-tour="org-switcher"
           className="flex items-center gap-2 rounded-full px-3 md:px-4 shrink-0"
           onClick={() => router.push('/organization')}
         >
@@ -62,10 +66,20 @@ export function Header() {
         </Button>
         <button
           onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}
+          data-tour="theme-toggle"
           className="cursor-pointer text-secondary-text relative w-9 h-9 flex items-center justify-center rounded-full transition-all duration-150 hover:bg-card-bg hover:text-primary-text outline-none"
           aria-label="Toggle theme"
         >
           {mounted && currentTheme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+        <button
+          onClick={() => startTour()}
+          data-tour="tour-button"
+          className="cursor-pointer text-secondary-text relative w-9 h-9 flex items-center justify-center rounded-full transition-all duration-150 hover:bg-card-bg hover:text-primary-text outline-none"
+          aria-label="Start Quick Tour"
+          title="Start Quick Tour"
+        >
+          <HelpCircle size={20} />
         </button>
       </div>
     </header>

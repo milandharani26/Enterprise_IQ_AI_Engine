@@ -98,7 +98,7 @@ class DriveDocumentChunk(Base):
     sequence_number = Column(Integer, nullable=False)
     text = Column(Text, nullable=False)
     token_count = Column(Integer, nullable=True)
-    embedding = Column(Vector(768), nullable=True)
+    embedding = Column(Vector(1536), nullable=True)
     embedding_model = Column(String(255), nullable=True)
     embedding_created_at = Column(DateTime, nullable=True)
     embedding_metadata = Column(JSONB, nullable=True)

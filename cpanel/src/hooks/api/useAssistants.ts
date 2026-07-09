@@ -14,6 +14,10 @@ export interface Assistant {
   guardrails?: any[];
   tools?: any[];
   prompt_library?: boolean;
+  llm_config?: {
+    provider: string;
+    model: string;
+  };
   created_at?: string;
   updated_at?: string;
 }
@@ -109,6 +113,14 @@ export const useAssistantsHooks = () => {
     },
   });
 
+  const useAvailableLLMsQuery = () => useQuery({
+    queryKey: [...assistantKeys.all, 'available-llms'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ providers: { id: string; name: string; models: string[] }[] }>('/assistants/available-llms');
+      return response.data;
+    },
+  });
+
   return {
     useAssistantsQuery,
     useAssistantQuery,
@@ -118,5 +130,6 @@ export const useAssistantsHooks = () => {
     useUpdateAssistantStatusMutation,
     useToolsQuery,
     usePreviewPromptMutation,
+    useAvailableLLMsQuery,
   };
 };

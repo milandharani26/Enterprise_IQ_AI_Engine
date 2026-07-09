@@ -1,9 +1,7 @@
 # modules/conversation/conversation_service.py
 import logging
 import uuid
-from typing import List
-
-logger = logging.getLogger(__name__)
+from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import asc
@@ -12,10 +10,12 @@ from engine.modules.conversation.conversation_schemas import NewUserMessagePaylo
 from engine.modules.organization.organization_models import Organization
 from engine.modules.assistant.assistant_models import Assistant
 from engine.modules.assistant.runtime.executor import AssistantExecutor
+from shared.logging import get_logger, StructuredLogger
 
 class ConversationService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, logger: Optional[StructuredLogger] = None):
         self.db = db
+        self.logger = logger or get_logger(module="conversation_service")
 
     async def _get_or_create_default_org(self) -> uuid.UUID:
         """Helper to find the first organization or create a default one if NestJS doesn't send one."""
@@ -56,6 +56,10 @@ class ConversationService:
         4. Persist the ASSISTANT response
         5. Return the ASSISTANT message
         """
+        self.logger.info(
+            "Chat turn started",
+            extra={"event": "conversation.turn_start", "conversation_id": str(payload.conversation_id), "agent_id": str(payload.agent_id) if payload.agent_id else None},
+        )
         org_id = payload.organization_id
         if not org_id and save_to_db:
             org_id = await self._get_or_create_default_org()
@@ -117,7 +121,7 @@ class ConversationService:
                 from engine.pipelines.ingestion.services.embedding_service import EmbeddingService
                 from engine.modules.assistant.semantic_cache import SemanticCacheService
                 
-                embed_svc = EmbeddingService()
+                embed_svc = EmbeddingService(org_id=org_id, db=self.db)
                 query_embedding = await embed_svc.embed_query(payload.content)
                 
                 cached_match = await SemanticCacheService.lookup_cache(
@@ -128,9 +132,11 @@ class ConversationService:
                 )
                 
                 if cached_match:
+                    self.logger.info("Semantic cache hit", extra={"event": "conversation.cache_hit", "assistant_id": str(assistant.assistant_id)})
                     ai_generated_text = cached_match.response
                     content_blocks = cached_match.sources or []
                 else:
+                    self.logger.info("Cache miss — running assistant executor", extra={"event": "conversation.cache_miss", "assistant_id": str(assistant.assistant_id)})
                     executor = AssistantExecutor()
                     ai_generated_text, content_blocks = await executor.execute(
                         session_id=str(payload.conversation_id),
@@ -163,6 +169,10 @@ class ConversationService:
                             f"Skipping cache write for non-cacheable query: {payload.content!r}"
                         )
             except Exception as e:
+                self.logger.error(
+                    f"Assistant execution failed: {e}",
+                    extra={"event": "conversation.execute_error", "error": str(e)},
+                )
                 ai_generated_text = (
                     f"I encountered an error while processing your request: {e}"
                 )

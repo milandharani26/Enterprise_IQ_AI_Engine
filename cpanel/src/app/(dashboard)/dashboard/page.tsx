@@ -73,7 +73,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div data-tour="stats-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard title="Total Assistants" value={metrics.total_assistants.toString()} icon={Bot} />
           <StatCard title="Active Connectors" value={metrics.active_connectors.toString()} icon={LinkIcon} />
           <StatCard title="Total Conversations" value={metrics.total_conversations.toString()} icon={MessageSquare} />
@@ -81,10 +81,10 @@ export default function Dashboard() {
         </div>
 
         {/* Details Grid Top Row: Main Chart + Donut */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div data-tour="dashboard-charts" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Engagement Depth Chart (Dual Area) */}
-          <div className="lg:col-span-2 rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
+          <div data-tour="engagement-chart" className="lg:col-span-2 rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
             <div className="p-5 flex justify-between items-center border-b border-gray-100 dark:border-white/5">
               <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <Activity className="w-4 h-4 text-gray-400" />
@@ -131,7 +131,7 @@ export default function Dashboard() {
           </div>
 
           {/* Knowledge Composition Donut */}
-          <div className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
+          <div data-tour="knowledge-chart" className="rounded-xl bg-white dark:bg-[#111113] border border-gray-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col">
             <div className="p-5 flex justify-between items-center border-b border-gray-100 dark:border-white/5">
               <h2 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <PieChartIcon className="w-4 h-4 text-gray-400" />

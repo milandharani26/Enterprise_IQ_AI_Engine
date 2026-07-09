@@ -21,6 +21,7 @@ class Assistant(Base):
     guardrails = Column(JSONB(astext_type=Text()), nullable=True)
     tools = Column(JSONB(astext_type=Text()), nullable=True)
     prompt_library = Column(Boolean, default=False, nullable=True)
+    llm_config = Column(JSONB(astext_type=Text()), nullable=True)
     cache_version = Column(Integer, default=1, nullable=False)
     
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
@@ -40,7 +41,7 @@ class AssistantQueryCache(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     assistant_id = Column(UUID(as_uuid=True), ForeignKey('assistant.assistant_id', ondelete='CASCADE'), nullable=False)
     query = Column(Text, nullable=False)
-    query_embedding = Column(Vector(768), nullable=False)
+    query_embedding = Column(Vector(1536), nullable=False)
     response = Column(Text, nullable=False)
     sources = Column(JSONB(astext_type=Text()), nullable=True)
     source_chunk_ids = Column(ARRAY(UUID(as_uuid=True)), nullable=True)
