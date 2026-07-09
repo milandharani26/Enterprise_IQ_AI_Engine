@@ -1,5 +1,18 @@
 """Celery task: document indexing (load -> chunk -> embed -> pgvector)."""
 
+import sys
+from pathlib import Path
+
+# Ensure the project root is on sys.path so the top-level `shared` package
+# (shared/logging, etc.) is importable by the Celery worker process.
+_project_root = str(Path(__file__).resolve().parents[3])
+print(f"DEBUG: _project_root is: {_project_root}")
+print(f"DEBUG: sys.path is: {sys.path}")
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+    print("DEBUG: Inserted _project_root into sys.path")
+print(f"DEBUG: sys.path after insertion is: {sys.path}")
+
 import asyncio
 import logging
 from uuid import UUID
@@ -21,6 +34,12 @@ def _run_async_in_worker(coro):
 
 
 def _index_document_impl(self, doc_id: str, workspace_id: str, reference_id: str = ""):
+    import sys
+    from pathlib import Path
+    _project_root = str(Path(__file__).resolve().parents[3])
+    if _project_root not in sys.path:
+        sys.path.insert(0, _project_root)
+
     from engine.pipelines.ingestion.indexing import run_index_document_task
 
     logger.info(

@@ -443,8 +443,8 @@ class DriveSearchTool(BaseTool):
                 "Try rephrasing or syncing more files."
             )
 
-        max_chars_per_chunk = 1200
-        max_total_chars = 6000
+        max_chars_per_chunk = 2500
+        max_total_chars = 12500
         lines = [
             f"Found {len(chunks)} relevant Google Drive document section(s):\n",
             "=" * 60,

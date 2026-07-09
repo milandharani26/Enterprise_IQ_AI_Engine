@@ -63,7 +63,7 @@ function MarkdownMessage({ text }: { text: string }) {
   );
 }
 
-export default function ChatPage() {
+function ChatPageContent() {
   const { user, activeOrganizationId, hasHydrated } = useAppStore();
   const { useSendChatMessageMutation } = useConversationHooks();
   const { useAssistantsQuery } = useAssistantsHooks();
@@ -388,5 +388,15 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+import { Suspense } from 'react';
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="flex h-[calc(100vh-8rem)] items-center justify-center text-secondary-text">Loading chat...</div>}>
+      <ChatPageContent />
+    </Suspense>
   );
 }

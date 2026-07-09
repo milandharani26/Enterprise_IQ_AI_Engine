@@ -15,7 +15,6 @@ def tool():
     instance._enable_query_expansion = True
     return instance
 
-
 class TestPreprocessQueryFast:
     def test_single_query(self, tool):
         result = asyncio.run(tool._preprocess_query_fast("leave policy"))

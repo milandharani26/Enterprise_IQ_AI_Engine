@@ -17,7 +17,7 @@ import { useCredentialsHooks } from '@/hooks/api/useCredentials';
 import { useAppStore } from '@/store/useAppStore';
 import toast from 'react-hot-toast';
 
-export default function AssistantDetailsClient() {
+function AssistantDetailsClientContent() {
   const searchParams = useSearchParams();
   const id = searchParams?.get('id') as string;
   const router = useRouter();
@@ -862,5 +862,15 @@ export default function AssistantDetailsClient() {
       </Modal>
 
     </div>
+  );
+}
+
+import { Suspense } from 'react';
+
+export default function AssistantDetailsClient() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center">Loading assistant details...</div>}>
+      <AssistantDetailsClientContent />
+    </Suspense>
   );
 }

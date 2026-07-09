@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCredentialsHooks } from '@/hooks/api/useCredentials';
 import { ShieldCheck, Loader2 } from 'lucide-react';
 
-export default function GoogleOAuthCallback() {
+function GoogleOAuthCallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { useExchangeGoogleOAuthCodeMutation } = useCredentialsHooks();
@@ -84,5 +84,15 @@ export default function GoogleOAuthCallback() {
         )}
       </div>
     </div>
+  );
+}
+
+import { Suspense } from 'react';
+
+export default function GoogleOAuthCallback() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center p-4">Loading...</div>}>
+      <GoogleOAuthCallbackContent />
+    </Suspense>
   );
 }

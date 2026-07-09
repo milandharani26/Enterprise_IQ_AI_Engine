@@ -160,6 +160,19 @@ async def run_index_document_task(doc_id: UUID, workspace_id: UUID) -> None:
                 len(chunks_data),
             )
 
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            # 9. Clean up uploaded file from disk (best-effort)
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            try:
+                deleted = await service.cleanup_uploaded_file(doc_id, workspace_id)
+                if deleted:
+                    logger.info("[INDEXING] 🗑️  Uploaded file cleaned up for doc=%s", doc_id)
+            except Exception as cleanup_err:
+                logger.warning(
+                    "[INDEXING] ⚠️  File cleanup failed for doc=%s: %s (non-fatal)",
+                    doc_id, cleanup_err,
+                )
+
         except Exception as e:
             logger.error(
                 "[INDEXING] ❌ FAILED for doc=%s\n"
