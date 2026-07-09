@@ -318,7 +318,7 @@ function StatsBar({ tables }: { tables: SchemaTableDetail[] }) {
   );
 }
 
-export default function MetadataPage() {
+function MetadataPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const connectorId = searchParams.get('id') as string;
@@ -480,5 +480,13 @@ export default function MetadataPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function MetadataPage() {
+  return (
+    <React.Suspense fallback={<div className="p-8 text-center text-secondary-text">Loading metadata...</div>}>
+      <MetadataPageContent />
+    </React.Suspense>
   );
 }

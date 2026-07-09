@@ -1,4 +1,5 @@
 # modules/conversation/conversation_service.py
+import logging
 import uuid
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -147,17 +148,26 @@ class ConversationService:
                         assistant=assistant,
                     )
                     
-                    # Cache the result
-                    await SemanticCacheService.write_cache(
-                        self.db,
-                        assistant.assistant_id,
-                        payload.content,
-                        query_embedding,
-                        ai_generated_text,
-                        content_blocks,
-                        None,
-                        assistant.cache_version
-                    )
+                    # Only cache queries whose answers are the same for ALL users
+                    from engine.modules.assistant.cache_classifier import CacheClassifier
+                    if CacheClassifier.is_cacheable(
+                        query=payload.content,
+                        conversation_history=None,
+                    ):
+                        await SemanticCacheService.write_cache(
+                            self.db,
+                            assistant.assistant_id,
+                            payload.content,
+                            query_embedding,
+                            ai_generated_text,
+                            content_blocks,
+                            None,
+                            assistant.cache_version
+                        )
+                    else:
+                        logger.info(
+                            f"Skipping cache write for non-cacheable query: {payload.content!r}"
+                        )
             except Exception as e:
                 self.logger.error(
                     f"Assistant execution failed: {e}",

@@ -12,7 +12,6 @@ from engine.modules.assistant.tools.exceptions import LLMInitializationError
 
 logger = logging.getLogger(__name__)
 
-
 from uuid import UUID
 
 def initialize_llm(llm_config: Optional[Dict[str, Any]] = None, org_id: Optional[UUID] = None) -> BaseChatModel:

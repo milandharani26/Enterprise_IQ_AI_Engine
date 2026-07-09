@@ -508,6 +508,78 @@ class DocumentService:
         await self.db.refresh(doc)
         return self._to_response(doc)
 
+    # ------------------------------------------------------------------
+    # Uploaded file cleanup (called after indexing completes)
+    # ------------------------------------------------------------------
+
+    async def cleanup_uploaded_file(
+        self,
+        document_id: UUID,
+        workspace_id: UUID,
+    ) -> bool:
+        """
+        Delete the physical uploaded file from disk after indexing is done.
+
+        Only cleans up local file:// uploads (saved by prepare_uploaded_document).
+        S3, GCS, and HTTP sources are left untouched.
+
+        Also removes the empty parent directory (workspace_id/reference_id folder)
+        and clears the source_url / file_path fields on the document record.
+
+        Returns True if a file was deleted, False otherwise.
+        """
+        import shutil
+
+        doc = await self._get_document_safe(document_id, workspace_id)
+        source_url = doc.source_url or ""
+
+        # Only clean up local file:// uploads
+        if not source_url.startswith("file://"):
+            logger.debug(
+                "[CLEANUP] Skipping non-local source: %s (doc=%s)",
+                source_url[:80], document_id,
+            )
+            return False
+
+        # Convert file:// URI back to a filesystem path
+        from urllib.parse import unquote, urlparse
+
+        parsed = urlparse(source_url)
+        # On Windows, file URIs look like file:///D:/path/to/file
+        file_path = Path(unquote(parsed.path))
+        # On Windows, parsed.path starts with /D:/... — strip leading slash
+        if os.name == "nt" and str(file_path).startswith("/"):
+            file_path = Path(str(file_path)[1:])
+
+        deleted = False
+
+        try:
+            if file_path.exists():
+                file_path.unlink()
+                logger.info("[CLEANUP] 🗑️  Deleted file: %s", file_path)
+                deleted = True
+
+                # Remove the parent directory if it's now empty
+                # (the ref_id directory: UPLOAD_DIR/workspace_id/reference_id/)
+                parent_dir = file_path.parent
+                if parent_dir.exists() and not any(parent_dir.iterdir()):
+                    shutil.rmtree(str(parent_dir), ignore_errors=True)
+                    logger.info("[CLEANUP] 🗑️  Removed empty directory: %s", parent_dir)
+            else:
+                logger.debug("[CLEANUP] File already absent: %s", file_path)
+        except Exception as e:
+            # File cleanup is best-effort — don't fail the indexing
+            logger.warning(
+                "[CLEANUP] ⚠️  Could not delete %s: %s", file_path, e
+            )
+
+        # Clear the file references on the document record
+        doc.source_url = None
+        doc.file_path = None
+        await self.db.commit()
+
+        return deleted
+
     async def save_chunks(
         self,
         document_id: UUID,
@@ -655,6 +727,15 @@ class DocumentService:
         )
         await run_index_document_task(prepared["doc_id"], workspace_id)
         doc = await self._get_document_safe(prepared["doc_id"], workspace_id)
+
+        # Clean up the uploaded file (indexing task already handles this for
+        # the async path, but the sync path calls run_index_document_task
+        # with a separate DB session so cleanup may not have run here).
+        try:
+            await self.cleanup_uploaded_file(prepared["doc_id"], workspace_id)
+        except Exception as e:
+            logger.warning("[UPLOAD] File cleanup failed (non-fatal): %s", e)
+
         return {
             "doc_id": doc.id,
             "reference_id": doc.reference_id,
