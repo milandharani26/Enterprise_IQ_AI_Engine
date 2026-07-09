@@ -71,7 +71,7 @@ class SqlExecutionService:
         # 2. Safety wrapper (auto-limit if missing)
         upper_sql = sql.upper()
         if "LIMIT " not in upper_sql and database_type.lower() in ("postgresql", "postgres", "mysql"):
-            sql = f"{sql.rstrip(';')} LIMIT 100"
+            sql = f"{sql.rstrip(';')} LIMIT 15"
 
         # 3. Get pool and execute
         logger.info(f"Retrieving/creating connection pool for '{conn_obj.name}' (Key: {conn_obj.id})...")

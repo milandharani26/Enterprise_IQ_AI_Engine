@@ -108,7 +108,7 @@ class Settings(BaseSettings):
     # Backward-compatible aliases used in some local env files
     default_embedding_provider: str = Field(default="", alias="DEFAULT_EMBEDDING_PROVIDER")
     default_embedding_model: str = Field(default="", alias="DEFAULT_EMBEDDING_MODEL")
-    embedding_dimensions: int = Field(default=768, alias="EMBEDDING_DIMENSIONS", description="Vector dimensions (768 for Gemini gemini-embedding-2)")
+    embedding_dimensions: int = Field(default=1536, alias="EMBEDDING_DIMENSIONS", description="Vector dimensions (1536 for OpenAI and custom-size Gemini)")
     embedding_max_retries: int = Field(default=10, alias="EMBEDDING_MAX_RETRIES", description="Max retries for embedding API calls")
     embedding_batch_size: int = Field(default=100, alias="EMBEDDING_BATCH_SIZE", description="Batch size for embedding API calls")
 

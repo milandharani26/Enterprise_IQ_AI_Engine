@@ -183,7 +183,7 @@ class SchemaCrawlerService:
 
         # Batch embed
         logger.info(f"Embedding schema structures ({len(all_texts)} texts)...")
-        pipeline_embed_svc = EmbeddingService()
+        pipeline_embed_svc = EmbeddingService(org_id=org_id, db=db)
         try:
             vectors = await pipeline_embed_svc.embed_chunks(all_texts)
             logger.info("Successfully generated embeddings for schema structures.")

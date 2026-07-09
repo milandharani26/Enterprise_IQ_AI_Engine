@@ -89,7 +89,7 @@ class SchemaEmbedding(Base):
     object_type = Column(String(50), nullable=False)
     object_name = Column(String(512), nullable=False)
     content = Column(Text, nullable=False)
-    embedding = Column(Vector(768), nullable=False)
+    embedding = Column(Vector(1536), nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
