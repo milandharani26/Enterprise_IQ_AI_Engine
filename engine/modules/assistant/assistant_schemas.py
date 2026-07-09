@@ -14,6 +14,7 @@ class AssistantBase(BaseModel):
     guardrails: Optional[List[Dict[str, Any]]] = None
     tools: Optional[List[Dict[str, Any]]] = None
     prompt_library: Optional[bool] = False
+    llm_config: Optional[Dict[str, Any]] = None
 
 class AssistantCreate(AssistantBase):
     pass
@@ -29,6 +30,7 @@ class AssistantUpdate(BaseModel):
     guardrails: Optional[List[Dict[str, Any]]] = None
     tools: Optional[List[Dict[str, Any]]] = None
     prompt_library: Optional[bool] = None
+    llm_config: Optional[Dict[str, Any]] = None
 
 class AssistantStatusUpdate(BaseModel):
     status: str = Field(..., max_length=50)

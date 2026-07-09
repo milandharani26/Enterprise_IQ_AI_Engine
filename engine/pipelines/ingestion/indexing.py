@@ -111,7 +111,7 @@ async def run_index_document_task(doc_id: UUID, workspace_id: UUID) -> None:
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             # 5. Embed chunks with error recovery
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            embedding_service = EmbeddingService()
+            embedding_service = EmbeddingService(org_id=workspace_id)
             chunk_texts = [c.get("text", "") for c in chunks_data]
 
             try:

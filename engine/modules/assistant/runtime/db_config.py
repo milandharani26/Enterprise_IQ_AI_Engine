@@ -89,6 +89,10 @@ def assistant_row_to_config_dict(assistant: Assistant) -> Dict[str, Any]:
             instruction = "You are a database assistant for this organization. You help users query SQL databases securely."
         else:
             instruction = "You are a helpful assistant."
+    llm_cfg = _build_llm_config(tools)
+    if getattr(assistant, "llm_config", None) and isinstance(assistant.llm_config, dict):
+        llm_cfg.update(assistant.llm_config)
+
     cfg: Dict[str, Any] = {
         "assistant_id": str(assistant.assistant_id),
         "name": assistant.assistant_name,
@@ -98,7 +102,7 @@ def assistant_row_to_config_dict(assistant: Assistant) -> Dict[str, Any]:
         "type": assistant.type,
         "status": assistant.status,
         "system_instruction": instruction,
-        "llm_config": _build_llm_config(tools),
+        "llm_config": llm_cfg,
         "tools": tools,
     }
     gr = _normalize_guardrails(assistant.guardrails)

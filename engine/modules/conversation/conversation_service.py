@@ -120,7 +120,7 @@ class ConversationService:
                 from engine.pipelines.ingestion.services.embedding_service import EmbeddingService
                 from engine.modules.assistant.semantic_cache import SemanticCacheService
                 
-                embed_svc = EmbeddingService()
+                embed_svc = EmbeddingService(org_id=org_id, db=self.db)
                 query_embedding = await embed_svc.embed_query(payload.content)
                 
                 cached_match = await SemanticCacheService.lookup_cache(

@@ -13,7 +13,9 @@ from engine.modules.assistant.tools.exceptions import LLMInitializationError
 logger = logging.getLogger(__name__)
 
 
-def initialize_llm(llm_config: Optional[Dict[str, Any]] = None) -> BaseChatModel:
+from uuid import UUID
+
+def initialize_llm(llm_config: Optional[Dict[str, Any]] = None, org_id: Optional[UUID] = None) -> BaseChatModel:
     if llm_config is None:
         llm_config = {}
 
@@ -23,8 +25,15 @@ def initialize_llm(llm_config: Optional[Dict[str, Any]] = None) -> BaseChatModel
     temperature = llm_config.get("temperature", settings.default_llm_temperature)
     max_tokens = llm_config.get("max_tokens", settings.default_llm_max_tokens)
 
-    api_key_env_var = f"{provider.upper()}_API_KEY"
-    api_key = os.getenv(api_key_env_var, "") or getattr(settings, f"{provider}_api_key", "")
+    api_key = ""
+    if org_id:
+        from engine.shared.services.credential_resolver import CredentialResolver
+        config = CredentialResolver.get_llm_credential_sync(org_id, provider)
+        api_key = config["api_key"]
+
+    if not api_key:
+        api_key_env_var = f"{provider.upper()}_API_KEY"
+        api_key = os.getenv(api_key_env_var, "") or getattr(settings, f"{provider}_api_key", "")
 
     try:
         provider_instance = LLMProviderFactory.create(

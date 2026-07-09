@@ -98,8 +98,16 @@ class SimpleReactiveType:
         llm_config = config_dict.get("llm_config", {}) or {}
         tools_config = config_dict.get("tools") or []
 
+        org_id = None
+        if ctx and ctx.organization_id:
+            from uuid import UUID
+            try:
+                org_id = UUID(ctx.organization_id)
+            except Exception:
+                pass
+
         try:
-            llm = initialize_llm(llm_config)
+            llm = initialize_llm(llm_config, org_id)
         except LLMInitializationError:
             raise
 

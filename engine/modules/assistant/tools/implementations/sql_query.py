@@ -141,6 +141,8 @@ class SqlQueryTool(BaseTool):
                 print(f"DEBUG POINT: query pass for embadding: {question}")
                 logger.info("STEP 2 - Embedding question")
                 try:
+                    self._embedding_service.org_id = UUID(org_id_str)
+                    self._embedding_service.db = db
                     q_vec = await self._embedding_service.embed_query(question)
                     logger.info("Embedding completed successfully")
                 except Exception as e:
@@ -232,12 +234,20 @@ class SqlQueryTool(BaseTool):
                 # STEP 6 - Generating SQL
                 logger.info("STEP 6 - Generating SQL")
                 try:
+                    org_uuid = None
+                    if org_id_str:
+                        try:
+                            org_uuid = UUID(org_id_str)
+                        except Exception:
+                            pass
+
                     generated_sql = await self._sql_generation.generate_sql(
                         question,
                         schema_context,
                         db_type,
                         guardrails,
                         conversation_history=ctx.conversation_history if ctx else None,
+                        org_id=org_uuid,
                     )
                 except Exception as e:
                     err_msg = str(e)

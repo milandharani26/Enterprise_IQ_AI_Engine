@@ -1,5 +1,6 @@
 import logging
 from typing import Optional, Dict, Any
+from uuid import UUID
 
 from langchain_core.prompts import PromptTemplate
 from engine.modules.assistant.runtime.llm_initializer import initialize_llm
@@ -37,6 +38,7 @@ class SqlGenerationService:
         if llm_config is None:
             llm_config = {}
         llm_config.setdefault("max_tokens", 1024)
+        self.llm_config = llm_config
         self.llm = initialize_llm(llm_config)
 
     async def pre_generate_guardrail_check(
@@ -108,12 +110,19 @@ class SqlGenerationService:
         database_type: str,
         guardrails: Optional[str] = None,
         conversation_history: Optional[list] = None,
+        org_id: Optional[UUID] = None,
     ) -> str:
         """
         Generates an accurate SQL query from a natural language question.
         conversation_history provides recent turns so the LLM can resolve
         follow-up references like 'whose details is this?' or 'my role'.
         """
+        llm = self.llm
+        if org_id:
+            try:
+                llm = initialize_llm(self.llm_config, org_id)
+            except Exception as e:
+                logger.error(f"[SqlGeneration] Failed to initialize dynamic LLM: {e}")
 
         system_instructions = (
             "You are an expert {database_type} SQL query writer.\n"
@@ -141,7 +150,7 @@ class SqlGenerationService:
             "OUTPUT RULES:\n"
             "1. Output ONLY the raw SQL query — no markdown, no backticks, no explanation.\n"
             "2. SELECT only — never INSERT, UPDATE, DELETE, DROP, or TRUNCATE.\n"
-            "3. Default LIMIT 100 unless the user specifies a different number.\n"
+            "3. Default LIMIT 15 unless the user specifies a different number.\n"
             "4. ALWAYS double-quote every table and column name to preserve case: \"full_name\", \"createdAt\".\n"
             "5. ALWAYS prefix tables with their schema: \"public\".\"users\", not just \"users\".\n\n"
 
@@ -243,7 +252,7 @@ class SqlGenerationService:
             + "SQL QUERY:"
         )
 
-        chain = prompt | self.llm
+        chain = prompt | llm
         try:
             result = await chain.ainvoke(
                 {

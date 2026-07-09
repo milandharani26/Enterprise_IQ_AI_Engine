@@ -34,10 +34,13 @@ export default function AssistantDetailsClient() {
     useDeleteAssistantMutation,
     useUpdateAssistantStatusMutation,
     useToolsQuery,
-    usePreviewPromptMutation
+    usePreviewPromptMutation,
+    useAvailableLLMsQuery
   } = useAssistantsHooks();
   const { data: assistant, isLoading } = useAssistantQuery(id);
   const { data: availableTools } = useToolsQuery();
+  const { data: llmData = { providers: [] } } = useAvailableLLMsQuery();
+  const providers = llmData?.providers || [];
   const updateMutation = useUpdateAssistantMutation();
   const deleteMutation = useDeleteAssistantMutation();
   const statusMutation = useUpdateAssistantStatusMutation();
@@ -58,12 +61,16 @@ export default function AssistantDetailsClient() {
     system_prompt: string;
     tools: any[];
     guardrails: any[];
+    llmProvider: string;
+    llmModel: string;
   }>({
     assistant_name: '',
     description: '',
     system_prompt: '',
     tools: [],
-    guardrails: []
+    guardrails: [],
+    llmProvider: 'google',
+    llmModel: 'gemini-3.1-flash-lite',
   });
 
   const [newTool, setNewTool] = useState({ tool_id: 'rag_search', credential_id: 'none', usage_instructions: '' });
@@ -77,9 +84,11 @@ export default function AssistantDetailsClient() {
         system_prompt: assistant.system_prompt || '',
         tools: assistant.tools || [],
         guardrails: assistant.guardrails || [],
+        llmProvider: assistant.llm_config?.provider || (providers[0]?.id || 'google'),
+        llmModel: assistant.llm_config?.model || (providers[0]?.models[0] || 'gemini-3.1-flash-lite'),
       });
     }
-  }, [assistant]);
+  }, [assistant?.assistant_id, providers.length]);
 
   const handleSave = () => {
     if (!assistant) return;
@@ -96,6 +105,10 @@ export default function AssistantDetailsClient() {
         guardrails: formData.guardrails,
         tools: formData.tools,
         prompt_library: assistant.prompt_library,
+        llm_config: {
+          provider: formData.llmProvider,
+          model: formData.llmModel,
+        }
       }
     }, {
       onSuccess: () => toast.success('Assistant updated successfully!'),
@@ -172,6 +185,17 @@ export default function AssistantDetailsClient() {
       </div>
     );
   }
+
+
+  const providerOptions = providers.map(p => ({
+    label: p.name,
+    value: p.id
+  }));
+
+  const selectedProviderData = providers.find(p => p.id === formData.llmProvider);
+  const modelOptions = selectedProviderData 
+    ? selectedProviderData.models.map(m => ({ label: m, value: m }))
+    : [];
 
   const isActive = assistant.status === 'enabled';
 
@@ -252,6 +276,31 @@ export default function AssistantDetailsClient() {
                 onChange={e => setFormData({ ...formData, description: e.target.value })}
                 className="min-h-[80px]"
               />
+              {providers.length === 0 ? (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-200 rounded-lg text-xs leading-relaxed border border-amber-200 dark:border-amber-900/30">
+                  ⚠️ No active API key credentials found for your organization, and no system fallback key is set. Please add a <strong>Google API Key</strong> or <strong>OpenAI API Key</strong> in the Credentials section first.
+                </div>
+              ) : (
+                <>
+                  <Select
+                    label="LLM Provider"
+                    options={providerOptions}
+                    value={formData.llmProvider}
+                    onChange={(e) => {
+                      const nextProvider = e.target.value;
+                      const provData = providers.find(p => p.id === nextProvider);
+                      const nextModel = provData?.models[0] || '';
+                      setFormData({ ...formData, llmProvider: nextProvider, llmModel: nextModel });
+                    }}
+                  />
+                  <Select
+                    label="LLM Model"
+                    options={modelOptions}
+                    value={formData.llmModel}
+                    onChange={(e) => setFormData({ ...formData, llmModel: e.target.value })}
+                  />
+                </>
+              )}
             </div>
           </section>
 

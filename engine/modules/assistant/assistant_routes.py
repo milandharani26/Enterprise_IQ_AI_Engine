@@ -31,6 +31,121 @@ async def get_available_tools(
         ))
     return result
 
+
+@router.get("/available-llms")
+async def get_available_llms(
+    db: AsyncSession = Depends(get_db),
+    org_id: UUID = Depends(get_current_organization_id),
+    current_user: User = Depends(require_admin)
+):
+    """
+    Get the list of LLM providers and their available models dynamically
+    based on the organization's credentials, falling back to system keys.
+    """
+    import httpx
+    import os
+    import asyncio
+    import logging
+    from sqlalchemy import select
+    from engine.shared.models.credential_model import Credential
+    from engine.shared.security.encryption import decrypt_value
+    from engine.shared.config.settings import get_settings
+
+    inner_logger = logging.getLogger("available_llms")
+    settings = get_settings()
+    available_providers = []
+
+    # 1. Fetch credentials from DB for the organization
+    stmt = select(Credential).where(
+        Credential.organization_id == org_id,
+        Credential.provider.in_(["Google API Key", "OpenAI API Key"]),
+        Credential.status == "Active"
+    )
+    res = await db.execute(stmt)
+    credentials = res.scalars().all()
+
+    # Map database provider name to provider ID
+    org_providers = {c.provider: c for c in credentials}
+
+    # Helper to fetch models from OpenAI
+    async def fetch_openai_models(api_key: str) -> list[str]:
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=api_key)
+            resp = await asyncio.wait_for(client.models.list(), timeout=5)
+            valid_models = []
+            for m in resp.data:
+                mid = m.id.lower()
+                if any(x in mid for x in ["gpt-4", "gpt-3.5", "o1-", "o3-"]) and "embedding" not in mid and "moderation" not in mid:
+                    valid_models.append(m.id)
+            return sorted(valid_models)
+        except Exception as e:
+            inner_logger.error(f"[AvailableLLMs] Failed to fetch OpenAI models: {e}")
+            return ["gpt-4o-mini", "gpt-4o", "o3-mini"]
+
+    # Helper to fetch models from Google Gemini
+    async def fetch_gemini_models(api_key: str) -> list[str]:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(url, timeout=5)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    models = data.get("models", [])
+                    valid_models = []
+                    for m in models:
+                        name = m.get("name", "")
+                        methods = m.get("supportedGenerationMethods", [])
+                        if "generateContent" in methods:
+                            short_name = name.replace("models/", "")
+                            if not any(x in short_name for x in ["embedding", "aqa", "experimental"]):
+                                valid_models.append(short_name)
+                    return sorted(valid_models)
+                else:
+                    inner_logger.error(f"[AvailableLLMs] Google models API returned status {resp.status_code}")
+        except Exception as e:
+            inner_logger.error(f"[AvailableLLMs] Failed to fetch Gemini models: {e}")
+        return ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.5-flash"]
+
+    has_org_creds = len(org_providers) > 0
+
+    # Check Google Gemini
+    google_cred = org_providers.get("Google API Key")
+    google_key = ""
+    if google_cred:
+        google_key = decrypt_value(google_cred.auth_data.get("api_key") or "")
+    elif not has_org_creds:
+        # Fall back to host env key only if the organization has no credentials of their own configured
+        google_key = os.getenv("GOOGLE_API_KEY") or getattr(settings, "google_api_key", "")
+
+    if google_key:
+        models = await fetch_gemini_models(google_key)
+        available_providers.append({
+            "id": "google",
+            "name": "Google Gemini",
+            "models": models
+        })
+
+    # Check OpenAI
+    openai_cred = org_providers.get("OpenAI API Key")
+    openai_key = ""
+    if openai_cred:
+        openai_key = decrypt_value(openai_cred.auth_data.get("api_key") or "")
+    elif not has_org_creds:
+        # Fall back to host env key only if the organization has no credentials of their own configured
+        openai_key = os.getenv("OPENAI_API_KEY") or getattr(settings, "openai_api_key", "")
+
+    if openai_key:
+        models = await fetch_openai_models(openai_key)
+        available_providers.append({
+            "id": "openai",
+            "name": "OpenAI",
+            "models": models
+        })
+
+    return {"providers": available_providers}
+
+
 @router.post("/preview-prompt", response_model=PreviewPromptResponse)
 async def preview_prompt(
     preview_request: PreviewPromptRequest,
@@ -128,3 +243,7 @@ async def update_assistant_status(
         user_id=current_user.id,
         org_id=org_id
     )
+
+
+
+
