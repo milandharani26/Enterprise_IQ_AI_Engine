@@ -1,4 +1,5 @@
 import logging
+from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import update
@@ -15,7 +16,26 @@ logger = logging.getLogger(__name__)
 
 class AssistantService:
     @staticmethod
+    def _validate_assistant_tools(tools: Optional[List[Dict[str, Any]]]):
+        if not tools:
+            return
+        for t in tools:
+            if not isinstance(t, dict):
+                continue
+            tool_id = t.get("tool_id") or t.get("id")
+            if tool_id and tool_id not in ["rag_search", "emit_ui_blocks", "emi_ui_blocks"]:
+                credential_id = t.get("credential_id") or t.get("credential")
+                if not credential_id or credential_id == "none":
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Credential is required for tool '{tool_id}'."
+                    )
+
+    @staticmethod
     async def create_assistant(db: AsyncSession, obj_in: AssistantCreate, user_id: UUID, org_id: UUID) -> Assistant:
+        # Validate tools config
+        AssistantService._validate_assistant_tools(obj_in.tools)
+
         # Check if assistant_name or assistant_code already exists
         query = select(Assistant).where(
             (Assistant.assistant_name == obj_in.assistant_name) | 
@@ -68,6 +88,9 @@ class AssistantService:
     async def update_assistant(
         db: AsyncSession, assistant_id: UUID, obj_in: AssistantCreate, user_id: UUID, org_id: UUID
     ) -> Assistant:
+        # Validate tools config
+        AssistantService._validate_assistant_tools(obj_in.tools)
+
         assistant = await AssistantService.get_assistant(db, assistant_id, org_id)
         
         update_data = obj_in.model_dump(exclude_unset=True)

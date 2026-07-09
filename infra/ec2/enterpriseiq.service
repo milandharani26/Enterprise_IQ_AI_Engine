@@ -1,0 +1,17 @@
+[Unit]
+Description=EnterpriseIQ AI FastAPI Monolith Service
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/enterpriseiq_ai
+# Executes the uvicorn server directly using the project's poetry virtualenv python interpreter
+ExecStart=/home/ubuntu/enterpriseiq_ai/.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=enterpriseiq
+
+[Install]
+WantedBy=multi-user.target
