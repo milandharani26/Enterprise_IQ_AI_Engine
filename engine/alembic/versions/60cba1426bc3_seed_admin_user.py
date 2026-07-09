@@ -40,7 +40,7 @@ def upgrade() -> None:
     connection = op.get_bind()
 
     # Check if admin exists
-    admin_email = 'admintest@gmai.com'
+    admin_email = 'admin@gmail.com'
     query = select(users_table.c.id).where(users_table.c.email == admin_email)
     res = connection.execute(query).fetchone()
 

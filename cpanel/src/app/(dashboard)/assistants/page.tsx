@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bot, Plus, Search, Filter, MoreVertical, Activity, Settings2, PlayCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
+import { Select } from '@/components/ui/Select';
 import { useAssistantsHooks, Assistant } from '@/hooks/api/useAssistants';
 import toast from 'react-hot-toast';
+import Link from 'next/link';
 
 const MOCK_ASSISTANTS = [
   {
@@ -59,16 +61,19 @@ const MOCK_ASSISTANTS = [
 
 export default function AssistantsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { useAssistantsQuery, useCreateAssistantMutation } = useAssistantsHooks();
+  const { useAssistantsQuery, useCreateAssistantMutation, useAvailableLLMsQuery } = useAssistantsHooks();
 
   const { data: assistants = [], isLoading } = useAssistantsQuery();
   const createMutation = useCreateAssistantMutation();
+  const { data: llmData = { providers: [] } } = useAvailableLLMsQuery();
 
   // Form State
   const [formData, setFormData] = useState({
     assistant_name: '',
     type: 'simple_reactive',
     description: '',
+    llmProvider: '',
+    llmModel: '',
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,15 +90,25 @@ export default function AssistantsPage() {
     createMutation.mutate({
       assistant_name: formData.assistant_name,
       assistant_code: formData.assistant_name.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
-      type: formData.type,
+      type: 'simple_reactive', // Lock to simple_reactive since it's the only supported architecture
       description: formData.description,
       status: 'enabled',
       tools: [{ tool_id: 'rag_search', usage_instructions: 'Always call first for document questions, lists, summaries, and explanations. Never answer document content without searching.' }],
       system_prompt: 'You are a document assistant. Always use rag_search before answering questions about files or knowledge. List indexed documents when asked. Cite source titles. Do not invent content.',
+      llm_config: {
+        provider: formData.llmProvider,
+        model: formData.llmModel,
+      }
     }, {
       onSuccess: () => {
         setIsModalOpen(false);
-        setFormData({ assistant_name: '', type: 'simple_reactive', description: '' });
+        setFormData({
+          assistant_name: '',
+          type: 'simple_reactive',
+          description: '',
+          llmProvider: 'google',
+          llmModel: 'gemini-3.1-flash-lite',
+        });
         toast.success('Assistant created successfully!');
       },
       onError: (error: any) => {
@@ -102,6 +117,29 @@ export default function AssistantsPage() {
       }
     });
   };
+  useEffect(() => {
+    if (isModalOpen && llmData.providers.length > 0) {
+      const defaultProvider = llmData.providers[0];
+      const defaultModel = defaultProvider.models[0] || '';
+      setFormData(prev => ({
+        ...prev,
+        llmProvider: prev.llmProvider || defaultProvider.id,
+        llmModel: prev.llmModel || defaultModel
+      }));
+    }
+  }, [isModalOpen, llmData.providers]);
+
+  const providers = llmData?.providers || [];
+
+  const providerOptions = providers.map(p => ({
+    label: p.name,
+    value: p.id
+  }));
+
+  const selectedProviderData = providers.find(p => p.id === formData.llmProvider);
+  const modelOptions = selectedProviderData 
+    ? selectedProviderData.models.map(m => ({ label: m, value: m }))
+    : [];
 
   return (
     <div className="flex flex-col gap-8 h-full">
@@ -191,12 +229,32 @@ export default function AssistantsPage() {
             onChange={(e) => setFormData({ ...formData, assistant_name: e.target.value })}
             autoFocus
           />
-          <Input
-            label="Model"
-            placeholder="e.g., gpt-4"
-            value={formData.type}
-            onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-          />
+          {providers.length === 0 ? (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-200 rounded-lg text-xs leading-relaxed border border-amber-200 dark:border-amber-900/30">
+              ⚠️ No active API key credentials found for your organization, and no system fallback key is set. Please add a <strong>Google API Key</strong> or <strong>OpenAI API Key</strong> in the Credentials section first.
+            </div>
+          ) : (
+            <>
+              <Select
+                label="LLM Provider"
+                options={providerOptions}
+                value={formData.llmProvider}
+                onChange={(e) => {
+                  const nextProvider = e.target.value;
+                  const provData = providers.find(p => p.id === nextProvider);
+                  const nextModel = provData?.models[0] || '';
+                  setFormData({ ...formData, llmProvider: nextProvider, llmModel: nextModel });
+                }}
+              />
+
+              <Select
+                label="LLM Model"
+                options={modelOptions}
+                value={formData.llmModel}
+                onChange={(e) => setFormData({ ...formData, llmModel: e.target.value })}
+              />
+            </>
+          )}
 
           <Textarea
             label="Description"
@@ -213,7 +271,7 @@ export default function AssistantsPage() {
               variant="primary"
               type="button"
               onClick={handleCreate}
-              disabled={createMutation.isPending || !formData.assistant_name || !formData.type}
+              disabled={createMutation.isPending || !formData.assistant_name || providers.length === 0}
             >
               {createMutation.isPending ? 'Creating...' : 'Create Assistant'}
             </Button>
@@ -224,7 +282,7 @@ export default function AssistantsPage() {
   );
 }
 
-import Link from 'next/link';
+
 
 function AssistantCard({ assistant, index }: { assistant: Assistant; index: number }) {
   return (

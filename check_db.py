@@ -1,16 +1,16 @@
 import asyncio
-from engine.shared.db.session import async_session
+from engine.shared.db.session import AsyncSessionLocal
 from engine.modules.assistant.assistant_models import Assistant
 from engine.modules.conversation.conversation_models import Conversation
 from sqlalchemy.future import select
 
 async def main():
-    async with async_session() as db:
+    async with AsyncSessionLocal() as db:
         print("--- ASSISTANTS ---")
         result = await db.execute(select(Assistant))
         assistants = result.scalars().all()
         for a in assistants:
-            print(f"ID: {a.assistant_id}, Org: {a.organization_id}, Status: {a.status}, Name: {a.assistant_name}")
+            print(f"ID: {a.assistant_id}, Org: {a.organization_id}, Status: {a.status}, Name: {a.assistant_name}, Type: {a.type}")
             
         print("\n--- CONVERSATIONS ---")
         result = await db.execute(select(Conversation))

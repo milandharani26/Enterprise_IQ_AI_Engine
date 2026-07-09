@@ -16,7 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useCredentialsHooks, Credential } from '@/hooks/api/useCredentials';
 import { useAppStore } from '@/store/useAppStore';
-const PROVIDERS = ['Google', 'PostgreSQL', 'MySQL'];
+const PROVIDERS = ['Google', 'PostgreSQL', 'MySQL', 'Google API Key', 'OpenAI API Key'];
 
 export default function CredentialsPage() {
   const { activeOrganizationId } = useAppStore();
@@ -147,6 +147,12 @@ export default function CredentialsPage() {
       testCredentialMutation.mutate({ provider, auth_data: payloadAuthData });
     }
   };
+  const hasApiKey = (credentials || []).some(
+    (c: Credential) => (c.provider === 'Google API Key' || c.provider === 'OpenAI API Key') && c.status === 'Active'
+  );
+  const displayProviders = hasApiKey 
+    ? PROVIDERS 
+    : ['Google API Key', 'OpenAI API Key'];
 
   return (
     <div className="flex flex-col gap-8 h-full">
@@ -251,6 +257,8 @@ export default function CredentialsPage() {
                                 <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{cred.display_info.email}</span>
                               ) : cred.display_info?.host ? (
                                 <span className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{cred.display_info.username}@{cred.display_info.host}</span>
+                              ) : cred.display_info?.masked_key ? (
+                                <span className="text-xs font-mono text-gray-500 dark:text-gray-400 mt-0.5">{cred.display_info.masked_key}</span>
                               ) : null}
                             </div>
                           </td>
@@ -385,7 +393,7 @@ export default function CredentialsPage() {
                         className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white appearance-none focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
                       >
                         <option value="">Select provider...</option>
-                        {PROVIDERS.map(p => (
+                        {displayProviders.map(p => (
                           <option key={p} value={p}>{p}</option>
                         ))}
                       </select>
@@ -468,12 +476,32 @@ export default function CredentialsPage() {
                     </div>
                   )}
 
-                  {provider !== 'Google' && provider !== 'PostgreSQL' && provider !== 'MySQL' && provider !== '' && (
+                  {(provider === 'Google API Key' || provider === 'OpenAI API Key') && (
+                    <div className="space-y-4">
+                      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 rounded-lg text-xs leading-relaxed">
+                        ⚡ This API key will be used for AI embedding generation and LLM calls for your organization. The first API key added determines the organization's embedding provider.
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">API Key *</label>
+                        <input
+                          type="password"
+                          placeholder="Enter your API Key"
+                          value={authData.api_key || ''}
+                          onChange={(e) => updateAuthData('api_key', e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {provider !== 'Google' && provider !== 'PostgreSQL' && provider !== 'MySQL' && provider !== 'Google API Key' && provider !== 'OpenAI API Key' && provider !== '' && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">API Key / Secret</label>
                       <input
                         type="password"
                         placeholder="••••••••••••••••••••••••"
+                        value={authData.api_key || ''}
+                        onChange={(e) => updateAuthData('api_key', e.target.value)}
                         className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#111113] text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-gray-300 dark:focus:ring-white/20 transition-shadow"
                       />
                     </div>

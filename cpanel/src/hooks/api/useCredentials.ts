@@ -17,6 +17,7 @@ export interface Credential {
     email?: string;
     host?: string;
     username?: string;
+    masked_key?: string;
   };
   sync_status?: string;
 }

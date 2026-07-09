@@ -153,7 +153,7 @@ async def ingest_drive_file(
             return
 
         # 6. Embed Chunks
-        embedding_service = EmbeddingService()
+        embedding_service = EmbeddingService(org_id=workspace_id)
         chunk_texts = [c.get("text", "") for c in chunks_data]
         try:
             vectors = await embedding_service.embed_chunks(chunk_texts)

@@ -37,4 +37,18 @@ class Credential(Base):
                 info["host"] = self.auth_data["host"]
             if "username" in self.auth_data:
                 info["username"] = self.auth_data["username"]
+            if "api_key" in self.auth_data:
+                from engine.shared.security.encryption import decrypt_value
+                encrypted_key = self.auth_data.get("api_key") or ""
+                try:
+                    decrypted_key = decrypt_value(encrypted_key)
+                    if decrypted_key:
+                        if len(decrypted_key) > 10:
+                            info["masked_key"] = f"{decrypted_key[:7]}...{decrypted_key[-4:]}"
+                        else:
+                            info["masked_key"] = "••••••••••••"
+                    else:
+                        info["masked_key"] = "••••••••••••"
+                except Exception:
+                    info["masked_key"] = "••••••••••••"
         return info

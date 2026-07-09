@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from engine.shared.db.session import AsyncSessionLocal
 from engine.shared.models.credential_model import Credential
+from engine.shared.security.encryption import encrypt_value
 from engine.shared.schemas.credential_schema import (
     CredentialCreate,
     CredentialUpdate,
@@ -98,6 +99,62 @@ async def test_credential(test_req: CredentialTestRequest):
                 success=True, message="Connection to Google Drive successful!"
             )
 
+        elif test_req.provider == "Google API Key":
+            api_key = test_req.auth_data.get("api_key")
+            if not api_key:
+                return CredentialTestResponse(
+                    success=False, message="API key is required"
+                )
+            
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=api_key, base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
+            try:
+                # Test with short input using gemini-embedding-2 model
+                await asyncio.wait_for(
+                    client.embeddings.create(
+                        model="gemini-embedding-2",
+                        input=["test"],
+                        dimensions=1536
+                    ),
+                    timeout=10
+                )
+                return CredentialTestResponse(
+                    success=True, message="Connection to Google Gemini API successful!"
+                )
+            except Exception as e:
+                logger.error(f"Google API Key testing failed: {e}")
+                return CredentialTestResponse(
+                    success=False, message=f"Failed to connect to Google API: {str(e)}"
+                )
+
+        elif test_req.provider == "OpenAI API Key":
+            api_key = test_req.auth_data.get("api_key")
+            if not api_key:
+                return CredentialTestResponse(
+                    success=False, message="API key is required"
+                )
+            
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=api_key)
+            try:
+                # Test with short input using text-embedding-3-small model
+                await asyncio.wait_for(
+                    client.embeddings.create(
+                        model="text-embedding-3-small",
+                        input=["test"],
+                        dimensions=1536
+                    ),
+                    timeout=10
+                )
+                return CredentialTestResponse(
+                    success=True, message="Connection to OpenAI API successful!"
+                )
+            except Exception as e:
+                logger.error(f"OpenAI API Key testing failed: {e}")
+                return CredentialTestResponse(
+                    success=False, message=f"Failed to connect to OpenAI API: {str(e)}"
+                )
+
         elif test_req.provider in ["PostgreSQL", "MySQL"]:
             auth_data = test_req.auth_data
             host = auth_data.get("host")
@@ -177,6 +234,19 @@ async def generate_google_oauth_url(
     req: OAuthGenerateUrlRequest, db: AsyncSession = Depends(get_db)
 ):
     try:
+        # Enforce API Key requirement before starting OAuth flows
+        key_stmt = select(Credential).where(
+            Credential.organization_id == req.organization_id,
+            Credential.provider.in_(["Google API Key", "OpenAI API Key"]),
+            Credential.status == "Active"
+        )
+        key_res = await db.execute(key_stmt)
+        if not key_res.scalars().first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Please add a Google API Key or OpenAI API Key first before adding database or Google Drive credentials. An active API key is required to generate embeddings for data source indexing."
+            )
+
         # Create a pending credential
         new_cred = Credential(
             organization_id=req.organization_id,
@@ -373,19 +443,40 @@ async def create_credential(
     db: AsyncSession = Depends(get_db)
 ):
     try:
+        # Enforce API Key requirement before creating other data source credentials
+        if cred_in.provider not in ["Google API Key", "OpenAI API Key"]:
+            key_stmt = select(Credential).where(
+                Credential.organization_id == cred_in.organization_id,
+                Credential.provider.in_(["Google API Key", "OpenAI API Key"]),
+                Credential.status == "Active"
+            )
+            key_res = await db.execute(key_stmt)
+            if not key_res.scalars().first():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Please add a Google API Key or OpenAI API Key first before adding database or Google Drive credentials. An active API key is required to generate embeddings for data source indexing."
+                )
+
+        auth_data = dict(cred_in.auth_data)
+        if cred_in.provider in ["Google API Key", "OpenAI API Key"]:
+            api_key = auth_data.get("api_key")
+            if api_key:
+                auth_data["api_key"] = encrypt_value(api_key)
+                logger.info(f"[CredentialsAPI] Encrypted API Key for provider: {cred_in.provider}")
+
         new_cred = Credential(
             organization_id=cred_in.organization_id,
             name=cred_in.name,
             provider=cred_in.provider,
             status=cred_in.status,
-            auth_data=cred_in.auth_data,
+            auth_data=auth_data,
         )
         db.add(new_cred)
         await db.commit()
         await db.refresh(new_cred)
 
-        # Auto-map to connector and start sync immediately!
-        if new_cred.status == "Active":
+        # Auto-map to connector and start sync immediately! (Only for data connectors, not API Keys)
+        if new_cred.status == "Active" and new_cred.provider not in ["Google API Key", "OpenAI API Key"]:
             await _auto_bind_and_sync(db, new_cred, background_tasks)
         await _attach_sync_status(db, new_cred)
 
