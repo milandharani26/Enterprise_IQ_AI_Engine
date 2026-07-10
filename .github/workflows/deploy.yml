@@ -3,7 +3,7 @@ name: Deploy All-in-One Monolith to AWS EC2
 on:
   push:
     branches:
-      - production # Triggering on dev branch based on your latest push
+      - production # Triggering on production branch based on your latest push
 
 jobs:
   build-and-deploy:
