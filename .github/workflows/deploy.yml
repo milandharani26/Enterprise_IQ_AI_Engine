@@ -57,16 +57,16 @@ jobs:
             EOF
 
             # 3. Log in to Docker Hub on the EC2 host (Optional for public repos, but good practice)
-            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+            echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
 
             # 4. Stop and remove previously running container
             echo "Stopping and removing existing enterpriseiq-ai container..."
-            docker stop enterpriseiq-ai || true
-            docker rm enterpriseiq-ai || true
+            sudo docker stop enterpriseiq-ai || true
+            sudo docker rm enterpriseiq-ai || true
 
             # 5. Run the unified all-in-one container
             echo "Starting new enterpriseiq-ai container..."
-            docker run -d \
+            sudo docker run -d \
               --name enterpriseiq-ai \
               --restart always \
               -p 8000:8000 \
@@ -78,4 +78,4 @@ jobs:
 
             # 6. Verify container status
             sleep 5
-            docker ps | grep enterpriseiq-ai
+            sudo docker ps | grep enterpriseiq-ai
