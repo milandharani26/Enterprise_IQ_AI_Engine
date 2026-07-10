@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Override DATABASE_URL so Alembic and FastAPI use the internal postgres on 5433 (URL-encode the @ in password as %40)
+export DATABASE_URL="postgresql+asyncpg://postgres:priyank%403220@localhost:5433/enterpriseiq_aii"
+
 echo "Starting All-in-One Container Initialization..."
 
 # 1. Ensure PostgreSQL directories have correct permissions
@@ -28,6 +31,8 @@ sed -i "s/port = 5432/port = 5433/g" /etc/postgresql/$PG_VERSION/main/postgresql
 # Configure PostgreSQL pg_hba.conf to trust local logins inside the container
 echo "local all all trust" > /etc/postgresql/$PG_VERSION/main/pg_hba.conf
 echo "host all all 127.0.0.1/32 trust" >> /etc/postgresql/$PG_VERSION/main/pg_hba.conf
+echo "host all all ::1/128 trust" >> /etc/postgresql/$PG_VERSION/main/pg_hba.conf
+echo "host all all 0.0.0.0/0 md5" >> /etc/postgresql/$PG_VERSION/main/pg_hba.conf
 
 # 4. Start PostgreSQL temporarily for initialization & migration
 echo "Starting PostgreSQL temporarily..."

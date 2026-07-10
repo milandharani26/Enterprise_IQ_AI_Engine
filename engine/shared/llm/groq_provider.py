@@ -1,4 +1,3 @@
-from langchain_groq import ChatGroq
 from langchain_core.language_models import BaseChatModel
 
 from .provider import LLMProviderBase, LLMProviderFactory
@@ -8,6 +7,7 @@ from .provider import LLMProviderBase, LLMProviderFactory
 class GroqProvider(LLMProviderBase):
 
     def get_chat_model(self) -> BaseChatModel:
+        from langchain_groq import ChatGroq
         return ChatGroq(
             model=self.model_id,
             api_key=self.api_key,

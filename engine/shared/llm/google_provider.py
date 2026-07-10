@@ -1,4 +1,3 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.language_models import BaseChatModel
 
 from .provider import LLMProviderBase, LLMProviderFactory
@@ -10,6 +9,7 @@ load_dotenv()
 @LLMProviderFactory.register("google")
 class GoogleProvider(LLMProviderBase):
     def get_chat_model(self) -> BaseChatModel:
+        from langchain_google_genai import ChatGoogleGenerativeAI
         return ChatGoogleGenerativeAI(
             model=self.model_id,
             google_api_key=self.api_key,

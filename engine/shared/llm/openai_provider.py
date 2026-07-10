@@ -1,4 +1,3 @@
-from langchain_openai import ChatOpenAI
 from langchain_core.language_models import BaseChatModel
 
 from .provider import LLMProviderBase, LLMProviderFactory
@@ -8,6 +7,7 @@ from .provider import LLMProviderBase, LLMProviderFactory
 class OpenAIProvider(LLMProviderBase):
 
     def get_chat_model(self) -> BaseChatModel:
+        from langchain_openai import ChatOpenAI
         return ChatOpenAI(
             model=self.model_id,
             api_key=self.api_key,

@@ -1,4 +1,3 @@
-from langchain_ollama import ChatOllama
 from langchain_core.language_models import BaseChatModel
 
 from engine.shared.config import get_settings
@@ -9,6 +8,7 @@ from .provider import LLMProviderBase, LLMProviderFactory
 class OllamaProvider(LLMProviderBase):
 
     def get_chat_model(self) -> BaseChatModel:
+        from langchain_ollama import ChatOllama
         settings = get_settings()
         return ChatOllama(
             model=self.model_id,

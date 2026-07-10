@@ -1,0 +1,11 @@
+.git
+.venv
+__pycache__
+cpanel/node_modules
+cpanel/.next
+tests/
+docs/
+*.pyc
+*.md
+.env
+.github
