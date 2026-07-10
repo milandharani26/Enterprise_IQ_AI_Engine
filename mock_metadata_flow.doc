@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        margin: 20px;
+    }
+    h1 {
+        color: #1a5f7a;
+        border-bottom: 2px solid #1a5f7a;
+        padding-bottom: 8px;
+    }
+    h2 {
+        color: #57c5b6;
+        margin-top: 30px;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 30px;
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 10px;
+        text-align: left;
+    }
+    th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+        color: #1a5f7a;
+    }
+    tr:nth-child(even) {
+        background-color: #fafafa;
+    }
+    .code {
+        font-family: Consolas, monospace;
+        background-color: #f8f8f8;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-size: 0.9em;
+    }
+</style>
+</head>
+<body>
+
+<h1>Schema Metadata Flow & Sample Data Walkthrough</h1>
+<p>This document presents mock datasets for the <code>connectors</code> tables under two sample organizations to demonstrate how the database connections, schema structures, relationships, embeddings, and query logs link together.</p>
+
+<h2>🏢 Organization Configurations</h2>
+<ol>
+    <li><strong>Organization 1:</strong> <code>qrioue_tech_llp</code>
+        <ul>
+            <li><strong>UUID:</strong> <span class="code">11111111-1111-1111-1111-111111111111</span></li>
+            <li><strong>Database:</strong> PostgreSQL containing an ecommerce schema (<code>orders</code> &amp; <code>users</code> tables).</li>
+        </ul>
+    </li>
+    <li><strong>Organization 2:</strong> <code>elite_evince_tech</code>
+        <ul>
+            <li><strong>UUID:</strong> <span class="code">22222222-2222-2222-2222-222222222222</span></li>
+            <li><strong>Database:</strong> MySQL containing an HR schema (<code>employees</code> &amp; <code>departments</code> tables).</li>
+        </ul>
+    </li>
+</ol>
+
+<h2>🗄️ Table 1: connectors.database_connections</h2>
+<p>Stores the metadata connection details to the external database.</p>
+<table>
+    <thead>
+        <tr>
+            <th>Column</th>
+            <th>Row 1 (qrioue_tech_llp)</th>
+            <th>Row 2 (elite_evince_tech)</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>id</strong> (UUID)</td>
+            <td><span class="code">55555555-5555-5555-5555-555555555555</span></td>
+            <td><span class="code">66666666-6666-6666-6666-666666666666</span></td>
+        </tr>
+        <tr>
+            <td><strong>organization_id</strong></td>
+            <td><span class="code">11111111-1111-1111-1111-111111111111</span></td>
+            <td><span class="code">22222222-2222-2222-2222-222222222222</span></td>
+        </tr>
+        <tr>
+            <td><strong>name</strong></td>
+            <td>qrioue_ecommerce_db</td>
+            <td>elite_hr_db</td>
+        </tr>
+        <tr>
+            <td><strong>database_type</strong></td>
+            <td>postgresql</td>
+            <td>mysql</td>
+        </tr>
+        <tr>
+            <td><strong>host</strong></td>
+            <td>pg-host.qrioue.local</td>
+            <td>mysql-host.elite.local</td>
+        </tr>
+        <tr>
+            <td><strong>port</strong></td>
+            <td>5432</td>
+            <td>3306</td>
+        </tr>
+        <tr>
+            <td><strong>database_name</strong></td>
+            <td>prod_ecommerce</td>
+            <td>company_hr</td>
+        </tr>
+        <tr>
+            <td><strong>schema_name</strong></td>
+            <td>public</td>
+            <td>company_hr</td>
+        </tr>
+        <tr>
+            <td><strong>username</strong></td>
+            <td>qrioue_read</td>
+            <td>elite_read</td>
+        </tr>
+        <tr>
+            <td><strong>password</strong></td>
+            <td>password_raw_or_encrypted</td>
+            <td>password_raw_or_encrypted</td>
+        </tr>
+        <tr>
+            <td><strong>is_active</strong></td>
+            <td>true</td>
+            <td>true</td>
+        </tr>
+        <tr>
+            <td><strong>last_synced_at</strong></td>
+            <td>2026-06-18 10:00:00</td>
+            <td>2026-06-18 10:15:00</td>
+        </tr>
+        <tr>
+            <td><strong>sync_status</strong></td>
+            <td>synced</td>
+            <td>synced</td>
+        </tr>
+        <tr>
+            <td><strong>sync_error</strong></td>
+            <td>null</td>
+            <td>null</td>
+        </tr>
+    </tbody>
+</table>
+
+<h2>🗄️ Table 2: connectors.schema_tables</h2>
+<p>Stores tables found inside connected databases.</p>
+<table>
+    <thead>
+        <tr>
+            <th>id (UUID)</th>
+            <th>organization_id</th>
+            <th>database_connection_id</th>
+            <th>schema_name</th>
+            <th>table_name</th>
+            <th>table_description</th>
+            <th>row_count_estimate</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="code">a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1</span></td>
+            <td><span class="code">11111111-1111-...</span></td>
+            <td><span class="code">55555555-5555-...</span></td>
+            <td>public</td>
+            <td>users</td>
+            <td>Stores client profile and authentication details</td>
+            <td>12500</td>
+        </tr>
+        <tr>
+            <td><span class="code">b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2</span></td>
+            <td><span class="code">11111111-1111-...</span></td>
+            <td><span class="code">55555555-5555-...</span></td>
+            <td>public</td>
+            <td>orders</td>
+            <td>Stores ecommerce transaction records and status</td>
+            <td>43200</td>
+        </tr>
+        <tr>
+            <td><span class="code">c3c3c3c3-c3c3-c3c3-c3c3-c3c3c3c3c3c3</span></td>
+            <td><span class="code">22222222-2222-...</span></td>
+            <td><span class="code">66666666-6666-...</span></td>
+            <td>company_hr</td>
+            <td>departments</td>
+            <td>Stores internal business departments and managers</td>
+            <td>15</td>
+        </tr>
+        <tr>
+            <td><span class="code">d4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4</span></td>
+            <td><span class="code">22222222-2222-...</span></td>
+            <td><span class="code">66666666-6666-...</span></td>
+            <td>company_hr</td>
+            <td>employees</td>
+            <td>Stores sensitive personal and employment status</td>
+            <td>450</td>
+        </tr>
+    </tbody>
+</table>
+
+<h2>🗄️ Table 3: connectors.schema_columns</h2>
+<p>Stores metadata columns belonging to the tables.</p>
+<table>
+    <thead>
+        <tr>
+            <th>id (UUID)</th>
+            <th>table_id</th>
+            <th>column_name</th>
+            <th>data_type</th>
+            <th>is_nullable</th>
+            <th>is_primary_key</th>
+            <th>default_value</th>
+            <th>column_description</th>
+            <th>ordinal_position</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="code">e5e5e5e5-e5e5-...</span></td>
+            <td><span class="code">a1a1...</span> (users)</td>
+            <td>id</td>
+            <td>integer</td>
+            <td>false</td>
+            <td>true</td>
+            <td>nextval(...)</td>
+            <td>Unique primary key</td>
+            <td>1</td>
+        </tr>
+        <tr>
+            <td><span class="code">f6f6f6f6-f6f6-...</span></td>
+            <td><span class="code">a1a1...</span> (users)</td>
+            <td>email</td>
+            <td>varchar</td>
+            <td>false</td>
+            <td>false</td>
+            <td>null</td>
+            <td>Used for user authentication</td>
+            <td>2</td>
+        </tr>
+        <tr>
+            <td><span class="code">g7g7g7g7-g7g7-...</span></td>
+            <td><span class="code">b2b2...</span> (orders)</td>
+            <td>id</td>
+            <td>integer</td>
+            <td>false</td>
+            <td>true</td>
+            <td>nextval(...)</td>
+            <td>Transaction order ID</td>
+            <td>1</td>
+        </tr>
+        <tr>
+            <td><span class="code">h8h8h8h8-h8h8-...</span></td>
+            <td><span class="code">b2b2...</span> (orders)</td>
+            <td>user_id</td>
+            <td>integer</td>
+            <td>false</td>
+            <td>false</td>
+            <td>null</td>
+            <td>References users(id)</td>
+            <td>2</td>
+        </tr>
+        <tr>
+            <td><span class="code">i9i9i9i9-i9i9-...</span></td>
+            <td><span class="code">d4d4...</span> (employees)</td>
+            <td>id</td>
+            <td>integer</td>
+            <td>false</td>
+            <td>true</td>
+            <td>null</td>
+            <td>Unique employee number</td>
+            <td>1</td>
+        </tr>
+        <tr>
+            <td><span class="code">j0j0j0j0-j0j0-...</span></td>
+            <td><span class="code">d4d4...</span> (employees)</td>
+            <td>salary</td>
+            <td>decimal</td>
+            <td>true</td>
+            <td>false</td>
+            <td>null</td>
+            <td>Restricted payroll column</td>
+            <td>2</td>
+        </tr>
+    </tbody>
+</table>
+
+<h2>🗄️ Table 4: connectors.schema_relationships</h2>
+<p>Stores foreign keys to aid AI in building JOIN queries.</p>
+<table>
+    <thead>
+        <tr>
+            <th>id (UUID)</th>
+            <th>organization_id</th>
+            <th>database_connection_id</th>
+            <th>source_table</th>
+            <th>source_column</th>
+            <th>target_table</th>
+            <th>target_column</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="code">r1r1r1r1-r1r1-...</span></td>
+            <td><span class="code">11111111-1111-...</span></td>
+            <td><span class="code">55555555-5555-...</span></td>
+            <td>public.orders</td>
+            <td>user_id</td>
+            <td>public.users</td>
+            <td>id</td>
+        </tr>
+        <tr>
+            <td><span class="code">r2r2r2r2-r2r2-...</span></td>
+            <td><span class="code">22222222-2222-...</span></td>
+            <td><span class="code">66666666-6666-...</span></td>
+            <td>company_hr.employees</td>
+            <td>dept_id</td>
+            <td>company_hr.departments</td>
+            <td>id</td>
+        </tr>
+    </tbody>
+</table>
+
+<h2>🗄️ Table 5: connectors.schema_embeddings</h2>
+<p>Stores generated schema summaries transformed to 1536-dimensional vectors.</p>
+<table>
+    <thead>
+        <tr>
+            <th>id (UUID)</th>
+            <th>organization_id</th>
+            <th>database_connection_id</th>
+            <th>object_type</th>
+            <th>object_name</th>
+            <th>content</th>
+            <th>embedding</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="code">v1v1v1v1-v1v1-...</span></td>
+            <td><span class="code">11111111-1111-...</span></td>
+            <td><span class="code">55555555-5555-...</span></td>
+            <td>database</td>
+            <td>database_summary</td>
+            <td>Database containing 2 tables: public.users, public.orders.</td>
+            <td><span class="code">[-0.0125, 0.0054, ... 1536 floats]</span></td>
+        </tr>
+        <tr>
+            <td><span class="code">v2v2v2v2-v2v2-...</span></td>
+            <td><span class="code">11111111-1111-...</span></td>
+            <td><span class="code">55555555-5555-...</span></td>
+            <td>table</td>
+            <td>public.users</td>
+            <td>Table public.users: Stores client profile... Columns: id, email...</td>
+            <td><span class="code">[0.0210, -0.0041, ... 1536 floats]</span></td>
+        </tr>
+    </tbody>
+</table>
+
+<h2>🗄️ Table 6: connectors.sql_query_logs</h2>
+<p>Logs queries executed by users for auditing and debugging.</p>
+<table>
+    <thead>
+        <tr>
+            <th>id (UUID)</th>
+            <th>organization_id</th>
+            <th>database_connection_id</th>
+            <th>question</th>
+            <th>generated_sql</th>
+            <th>selected_database</th>
+            <th>retrieved_tables</th>
+            <th>execution_time_ms</th>
+            <th>row_count</th>
+            <th>success</th>
+            <th>error_message</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="code">log1log1-log1-...</span></td>
+            <td><span class="code">11111111-...</span></td>
+            <td><span class="code">55555555-...</span></td>
+            <td>Show last 5 orders</td>
+            <td><span class="code">SELECT * FROM public.orders ORDER BY created_at DESC LIMIT 5;</span></td>
+            <td>prod_ecommerce</td>
+            <td>["public.orders"]</td>
+            <td>24</td>
+            <td>5</td>
+            <td>true</td>
+            <td>null</td>
+        </tr>
+        <tr>
+            <td><span class="code">log2log2-log2-...</span></td>
+            <td><span class="code">22222222-...</span></td>
+            <td><span class="code">66666666-...</span></td>
+            <td>Drop users table</td>
+            <td>null</td>
+            <td>company_hr</td>
+            <td>[]</td>
+            <td>0</td>
+            <td>0</td>
+            <td>false</td>
+            <td>GUARDRAIL_VIOLATION: DDL operations (DROP) are forbidden.</td>
+        </tr>
+    </tbody>
+</table>
+
+</body>
+</html>

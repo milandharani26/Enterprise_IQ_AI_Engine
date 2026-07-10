@@ -1,0 +1,558 @@
+from uuid import UUID
+from typing import Dict, List, Any
+
+from sqlalchemy import select, delete
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+import asyncpg
+# import aiomysql  # Will be added for MySQL support
+
+from engine.modules.database_connector.database_connector_models import (
+    SchemaTable,
+    SchemaColumn,
+    SchemaRelationship,
+    SchemaEmbedding
+)
+from engine.shared.models.connector_model import Connector
+from engine.shared.models.credential_model import Credential
+from engine.pipelines.ingestion.services.embedding_service import EmbeddingService
+
+from shared.logging import get_logger
+logger = get_logger("schema_crawler")
+
+class SchemaCrawlerService:
+    async def sync_database_schema(self, db: AsyncSession, connection_id: UUID, org_id: UUID):
+        """Orchestrates the syncing of schema from external database to our metadata tables."""
+        logger.info(f"Starting schema sync for connection {connection_id}")
+        
+        # 1. Fetch connection details
+        logger.info(f"Retrieving database connection details for connector ID: {connection_id}")
+        stmt = select(Connector).where(
+            Connector.id == connection_id,
+            Connector.organization_id == org_id
+        )
+        try:
+            result = await db.execute(stmt)
+            conn_obj = result.scalars().first()
+        except Exception as e:
+            logger.error(f"Failed to query database connector {connection_id}: {e}")
+            return
+        
+        if not conn_obj:
+            logger.error(f"Connection {connection_id} not found or deleted in workspace connectors.")
+            return
+
+        logger.info(f"Retrieving credentials for connector '{conn_obj.name}' (Credential ID: {conn_obj.credential_id})")
+        try:
+            cred_stmt = select(Credential).where(Credential.id == conn_obj.credential_id)
+            cred_result = await db.execute(cred_stmt)
+            cred_obj = cred_result.scalars().first()
+        except Exception as e:
+            logger.error(f"Failed to query credentials for credential ID {conn_obj.credential_id}: {e}")
+            conn_obj.sync_status = "failed"
+            conn_obj.sync_error = f"Failed to retrieve credentials: {e}"
+            await db.commit()
+            return
+        
+        if not cred_obj:
+            logger.error(f"Credential record {conn_obj.credential_id} not found for connector '{conn_obj.name}'.")
+            conn_obj.sync_status = "failed"
+            conn_obj.sync_error = f"Credentials record {conn_obj.credential_id} not found."
+            await db.commit()
+            return
+
+        conn_obj.sync_status = "syncing"
+        await db.commit()
+
+        auth_data = cred_obj.auth_data
+        database_type = conn_obj.connector_id
+        logger.info(
+            f"Retrieved connection details. Connector Name: '{conn_obj.name}', Database Type: {database_type}, "
+            f"Host: {auth_data.get('host')}, Port: {auth_data.get('port')}, Database Name: {auth_data.get('database')}"
+        )
+
+        try:
+            # 2. Extract metadata based on DB type
+            if database_type.lower() in ("postgresql", "postgres"):
+                tables, columns, relationships = await self._crawl_postgres(auth_data)
+            elif database_type.lower() == "mysql":
+                tables, columns, relationships = await self._crawl_mysql(auth_data)
+            else:
+                raise ValueError(f"Unsupported database type: {database_type}")
+
+            # 3. Persist metadata
+            await self._persist_metadata(db, conn_obj, tables, columns, relationships)
+
+            # 4. Generate embeddings using batched pipeline service
+            await self._generate_embeddings(db, connection_id, org_id)
+
+            # 5. Update status
+            conn_obj.sync_status = "synced"
+            from datetime import datetime
+            conn_obj.last_synced_at = datetime.utcnow()
+            conn_obj.sync_error = None
+            
+            # Invalidate semantic cache for the organization
+            from engine.modules.assistant.semantic_cache import SemanticCacheService
+            await SemanticCacheService.invalidate_workspace_cache(db, org_id)
+            
+            await db.commit()
+            logger.info(f"Schema sync completed successfully for connection {connection_id}")
+
+        except Exception as e:
+            logger.exception(f"Schema sync failed for connection {connection_id}")
+            conn_obj.sync_status = "failed"
+            conn_obj.sync_error = str(e)
+            await db.commit()
+
+    async def _generate_embeddings(self, db: AsyncSession, connection_id: UUID, org_id: UUID):
+        """Generates natural language descriptions of tables and relationships, and embeds them."""
+        logger.info(f"Generating schema embeddings for connection {connection_id}")
+
+        # 1. Clear old embeddings
+        await db.execute(delete(SchemaEmbedding).where(SchemaEmbedding.connector_id == connection_id))
+        await db.flush()
+
+        # 2. Fetch tables and columns
+        stmt = select(SchemaTable).where(
+            SchemaTable.connector_id == connection_id,
+            SchemaTable.organization_id == org_id
+        )
+        tables = (await db.execute(stmt)).scalars().all()
+
+        if not tables:
+            logger.warning(f"No tables found for connection {connection_id} to embed.")
+            return
+
+        table_ids = [t.id for t in tables]
+        stmt_cols = select(SchemaColumn).where(SchemaColumn.table_id.in_(table_ids))
+        columns = (await db.execute(stmt_cols)).scalars().all()
+
+        col_map = {}
+        for c in columns:
+            col_map.setdefault(c.table_id, []).append(c)
+
+        # 3. Fetch relationships
+        stmt_rels = select(SchemaRelationship).where(
+            SchemaRelationship.connector_id == connection_id
+        )
+        relationships = (await db.execute(stmt_rels)).scalars().all()
+
+        embeddings_to_insert = []
+        all_texts = []
+        embed_defs = []
+
+        # A. Embed the whole database summary
+        table_names = [f"{t.schema_name + '.' if t.schema_name else ''}{t.table_name}" for t in tables]
+        db_summary = f"Database containing {len(tables)} tables: {', '.join(table_names)}."
+        all_texts.append(db_summary)
+        embed_defs.append({
+            "object_type": "database",
+            "object_name": "database_summary",
+            "content": db_summary
+        })
+
+        # B. Embed each table
+        for t in tables:
+            t_cols = col_map.get(t.id, [])
+            col_desc = []
+            for c in t_cols:
+                pk_str = " (Primary Key)" if c.is_primary_key else ""
+                desc_str = f" - {c.column_description}" if c.column_description else ""
+                col_desc.append(f"{c.column_name} ({c.data_type}){pk_str}{desc_str}")
+            
+            full_t_name = f"{t.schema_name + '.' if t.schema_name else ''}{t.table_name}"
+            desc = t.table_description or "No description provided."
+            content = f"Table {full_t_name}: {desc}. Columns: {', '.join(col_desc)}."
+            all_texts.append(content)
+            embed_defs.append({
+                "object_type": "table",
+                "object_name": full_t_name,
+                "content": content
+            })
+
+        # C. Embed each relationship
+        for r in relationships:
+            content = f"Relationship: Table {r.source_table} column {r.source_column} is a foreign key referencing Table {r.target_table} column {r.target_column}."
+            all_texts.append(content)
+            embed_defs.append({
+                "object_type": "relationship",
+                "object_name": f"{r.source_table}->{r.target_table}",
+                "content": content
+            })
+
+        # Batch embed
+        logger.info(f"Embedding schema structures ({len(all_texts)} texts)...")
+        pipeline_embed_svc = EmbeddingService(org_id=org_id, db=db)
+        try:
+            vectors = await pipeline_embed_svc.embed_chunks(all_texts)
+            logger.info("Successfully generated embeddings for schema structures.")
+        except Exception as e:
+            err_msg = str(e)
+            if "rate limit" in err_msg.lower() or "429" in err_msg or "token" in err_msg.lower() or "limit" in err_msg.lower():
+                logger.error(f"Embedding schema chunks failed due to rate/token limit: {e}")
+                raise Exception(f"Failed to generate schema embeddings (Rate/Token limit reached on embedding service): {e}")
+            else:
+                logger.error(f"Failed to generate schema embeddings: {e}")
+                raise Exception(f"Failed to generate schema embeddings: {e}")
+
+        for i, vec in enumerate(vectors):
+            meta = embed_defs[i]
+            embeddings_to_insert.append(
+                SchemaEmbedding(
+                    organization_id=org_id,
+                    connector_id=connection_id,
+                    object_type=meta["object_type"],
+                    object_name=meta["object_name"],
+                    content=meta["content"],
+                    embedding=vec
+                )
+            )
+
+        # Batch insert
+        db.add_all(embeddings_to_insert)
+        await db.commit()
+        logger.info(f"Successfully generated {len(embeddings_to_insert)} schema embeddings for connection {connection_id}")
+
+    async def _crawl_postgres(self, auth_data: dict):
+        """Connects to PostgreSQL and extracts schema metadata."""
+        schema_filter = auth_data.get('schema') or 'public'
+        host = auth_data.get('host')
+        port = auth_data.get('port')
+        database = auth_data.get('database')
+        username = auth_data.get('username')
+        
+        logger.info(f"Connecting to PostgreSQL for schema crawling: host={host}, port={port}, database={database}, user={username}, schema={schema_filter}")
+        
+        try:
+            conn = await asyncpg.connect(
+                user=username,
+                password=auth_data.get('password'),
+                database=database,
+                host=host,
+                port=int(port),
+            )
+            logger.info("Successfully established connection to PostgreSQL server for schema crawling.")
+        except Exception as e:
+            err_name = type(e).__name__
+            err_msg = str(e).lower()
+            logger.error(f"Failed to connect to PostgreSQL during crawl: class={err_name}, error={e}")
+            
+            if "password" in err_msg or "auth" in err_msg or "access denied" in err_msg or "invalidauthorization" in err_msg.lower():
+                raise Exception(f"PostgreSQL authentication failed for user '{username}': check your username and password.")
+            elif "database" in err_msg and ("unknown" in err_msg or "does not exist" in err_msg or "invalidcatalogname" in err_msg.lower()):
+                raise Exception(f"Database '{database}' does not exist on PostgreSQL server.")
+            elif "connection refused" in err_msg or "cant_connect" in err_msg or "conn" in err_msg or "host" in err_msg or "unreachable" in err_msg:
+                raise Exception(f"Failed to connect to PostgreSQL server at {host}:{port}. Verify host and port.")
+            else:
+                raise Exception(f"Failed to connect to PostgreSQL: {e}")
+
+        try:
+            # Fetch Tables with descriptions
+            tables_query = f"""
+                SELECT 
+                    t.table_name,
+                    obj_description(pgc.oid, 'pg_class') AS table_description
+                FROM information_schema.tables t
+                JOIN pg_class pgc ON pgc.relname = t.table_name
+                JOIN pg_namespace pgn ON pgn.oid = pgc.relnamespace AND pgn.nspname = t.table_schema
+                WHERE t.table_schema = $1 AND t.table_type = 'BASE TABLE'
+            """
+            table_rows = await conn.fetch(tables_query, schema_filter)
+            tables = [
+                {
+                    "table_name": r["table_name"],
+                    "schema_name": schema_filter,
+                    "table_description": r["table_description"]
+                }
+                for r in table_rows
+            ]
+
+            # Fetch Columns with descriptions
+            columns_query = f"""
+                SELECT 
+                    cols.table_name, 
+                    cols.column_name, 
+                    cols.data_type, 
+                    cols.is_nullable, 
+                    cols.ordinal_position, 
+                    cols.column_default,
+                    col_description(pgc.oid, cols.ordinal_position::int) AS column_description
+                FROM information_schema.columns cols
+                JOIN pg_class pgc ON pgc.relname = cols.table_name
+                JOIN pg_namespace pgn ON pgn.oid = pgc.relnamespace AND pgn.nspname = cols.table_schema
+                WHERE cols.table_schema = $1
+            """
+            col_rows = await conn.fetch(columns_query, schema_filter)
+            columns = []
+            for r in col_rows:
+                columns.append({
+                    "table_name": r["table_name"],
+                    "column_name": r["column_name"],
+                    "data_type": r["data_type"],
+                    "is_nullable": r["is_nullable"] == 'YES',
+                    "ordinal_position": r["ordinal_position"],
+                    "default_value": r["column_default"],
+                    "column_description": r["column_description"],
+                    "is_primary_key": False # Will be updated in next query
+                })
+
+            # Fetch Primary Keys
+            pk_query = f"""
+                SELECT kcu.table_name, kcu.column_name
+                FROM information_schema.table_constraints tco
+                JOIN information_schema.key_column_usage kcu 
+                  ON kcu.constraint_name = tco.constraint_name
+                  AND kcu.constraint_schema = tco.constraint_schema
+                WHERE tco.constraint_type = 'PRIMARY KEY' AND tco.table_schema = $1
+            """
+            pk_rows = await conn.fetch(pk_query, schema_filter)
+            pk_set = {(r["table_name"], r["column_name"]) for r in pk_rows}
+            for col in columns:
+                if (col["table_name"], col["column_name"]) in pk_set:
+                    col["is_primary_key"] = True
+
+            # Fetch Foreign Keys
+            fk_query = f"""
+                SELECT
+                    tc.table_name AS source_table,
+                    kcu.column_name AS source_column,
+                    ccu.table_name AS target_table,
+                    ccu.column_name AS target_column
+                FROM information_schema.table_constraints AS tc
+                JOIN information_schema.key_column_usage AS kcu
+                  ON tc.constraint_name = kcu.constraint_name
+                  AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage AS ccu
+                  ON ccu.constraint_name = tc.constraint_name
+                  AND ccu.table_schema = tc.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1
+            """
+            fk_rows = await conn.fetch(fk_query, schema_filter)
+            relationships = []
+            for r in fk_rows:
+                relationships.append({
+                    "source_table": r["source_table"],
+                    "source_column": r["source_column"],
+                    "target_table": r["target_table"],
+                    "target_column": r["target_column"]
+                })
+
+            return tables, columns, relationships
+        finally:
+            await conn.close()
+
+    async def _crawl_mysql(self, auth_data: dict):
+        """Connects to MySQL and extracts schema metadata."""
+        import aiomysql
+        schema_filter = auth_data.get('schema') or auth_data.get('database')
+        host = auth_data.get('host')
+        port = auth_data.get('port')
+        database = auth_data.get('database')
+        username = auth_data.get('username')
+        
+        logger.info(f"Connecting to MySQL for schema crawling: host={host}, port={port}, database={database}, user={username}, schema_filter={schema_filter}")
+        
+        try:
+            conn = await aiomysql.connect(
+                host=host,
+                port=int(port),
+                user=username,
+                password=auth_data.get('password'),
+                db=database,
+            )
+            logger.info("Successfully established connection to MySQL server for schema crawling.")
+        except Exception as e:
+            err_name = type(e).__name__
+            err_msg = str(e).lower()
+            logger.error(f"Failed to connect to MySQL during crawl: class={err_name}, error={e}")
+            
+            if "password" in err_msg or "auth" in err_msg or "access denied" in err_msg or "accessdenied" in err_msg.lower():
+                raise Exception(f"MySQL authentication failed for user '{username}': check your username and password.")
+            elif "database" in err_msg and ("unknown" in err_msg or "does not exist" in err_msg or "bad_db" in err_msg.lower()):
+                raise Exception(f"Database '{database}' does not exist on MySQL server.")
+            elif "connection refused" in err_msg or "cant_connect" in err_msg or "conn" in err_msg or "host" in err_msg or "unreachable" in err_msg:
+                raise Exception(f"Failed to connect to MySQL server at {host}:{port}. Verify host and port.")
+            else:
+                raise Exception(f"Failed to connect to MySQL: {e}")
+
+        try:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                # Fetch Tables with comments
+                await cur.execute(
+                    "SELECT TABLE_NAME, TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = %s AND TABLE_TYPE = 'BASE TABLE'",
+                    (schema_filter,)
+                )
+                table_rows = await cur.fetchall()
+                tables = [
+                    {
+                        "table_name": r["TABLE_NAME"],
+                        "schema_name": schema_filter,
+                        "table_description": r.get("TABLE_COMMENT")
+                    }
+                    for r in table_rows
+                ]
+
+                # Fetch Columns with comments
+                await cur.execute(
+                    "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE, ORDINAL_POSITION, COLUMN_DEFAULT, COLUMN_KEY, COLUMN_COMMENT "
+                    "FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = %s",
+                    (schema_filter,)
+                )
+                col_rows = await cur.fetchall()
+                columns = []
+                for r in col_rows:
+                    columns.append({
+                        "table_name": r["TABLE_NAME"],
+                        "column_name": r["COLUMN_NAME"],
+                        "data_type": r["DATA_TYPE"],
+                        "is_nullable": r["IS_NULLABLE"] == 'YES',
+                        "ordinal_position": r["ORDINAL_POSITION"],
+                        "default_value": r["COLUMN_DEFAULT"],
+                        "column_description": r.get("COLUMN_COMMENT"),
+                        "is_primary_key": r["COLUMN_KEY"] == 'PRI'
+                    })
+
+                # Fetch Foreign Keys
+                await cur.execute(
+                    "SELECT TABLE_NAME as source_table, COLUMN_NAME as source_column, "
+                    "REFERENCED_TABLE_NAME as target_table, REFERENCED_COLUMN_NAME as target_column "
+                    "FROM information_schema.KEY_COLUMN_USAGE "
+                    "WHERE TABLE_SCHEMA = %s AND REFERENCED_TABLE_NAME IS NOT NULL",
+                    (schema_filter,)
+                )
+                fk_rows = await cur.fetchall()
+                relationships = []
+                for r in fk_rows:
+                    relationships.append({
+                        "source_table": r["source_table"],
+                        "source_column": r["source_column"],
+                        "target_table": r["target_table"],
+                        "target_column": r["target_column"]
+                    })
+
+                return tables, columns, relationships
+        finally:
+            conn.close()
+
+    async def _persist_metadata(self, db: AsyncSession, conn_obj: Connector, tables: list, columns: list, relationships: list):
+        """
+        Saves metadata to database using an UPSERT strategy.
+
+        User-set descriptions (where user_table_description / user_column_description = True)
+        are preserved and never overwritten by the sync crawler. All structural fields
+        (schema_name, data_type, is_nullable, etc.) are always refreshed.
+        """
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        from datetime import datetime
+
+        # 1. Upsert Tables (ON CONFLICT DO UPDATE — preserve user descriptions)
+        table_map = {}  # table_name -> UUID
+
+        for t in tables:
+            stmt = pg_insert(SchemaTable).values(
+                organization_id=conn_obj.organization_id,
+                connector_id=conn_obj.id,
+                schema_name=t["schema_name"],
+                table_name=t["table_name"],
+                table_description=t.get("table_description"),
+                user_table_description=False,
+            ).on_conflict_do_update(
+                index_elements=["connector_id", "schema_name", "table_name"],
+                set_={
+                    # Always refresh structural fields
+                    "schema_name": t["schema_name"],
+                    "updated_at": datetime.utcnow(),
+                    # Only overwrite description if user has NOT set a manual one
+                    "table_description": sa.case(
+                        (SchemaTable.__table__.c.user_table_description == False,
+                         t.get("table_description")),
+                        else_=SchemaTable.__table__.c.table_description
+                    ),
+                }
+            ).returning(SchemaTable.__table__.c.id, SchemaTable.__table__.c.table_name)
+
+            result = await db.execute(stmt)
+            row = result.fetchone()
+            if row:
+                table_map[row.table_name] = row.id
+
+        await db.flush()
+
+        # Re-fetch any tables not touched by upsert (e.g. if schema had no conflict rows)
+        if not table_map:
+            existing = (await db.execute(
+                select(SchemaTable).where(SchemaTable.connector_id == conn_obj.id)
+            )).scalars().all()
+            table_map = {t.table_name: t.id for t in existing}
+
+        # 2. Upsert Columns (ON CONFLICT DO UPDATE — preserve user descriptions)
+        for c in columns:
+            table_id = table_map.get(c["table_name"])
+            if not table_id:
+                continue  # Edge case: table wasn't upserted
+
+            stmt = pg_insert(SchemaColumn).values(
+                table_id=table_id,
+                column_name=c["column_name"],
+                data_type=c["data_type"],
+                is_nullable=c["is_nullable"],
+                is_primary_key=c["is_primary_key"],
+                default_value=str(c["default_value"]) if c["default_value"] is not None else None,
+                column_description=c.get("column_description"),
+                user_column_description=False,
+                ordinal_position=c["ordinal_position"],
+            ).on_conflict_do_update(
+                index_elements=["table_id", "column_name"],
+                set_={
+                    # Always refresh structural fields
+                    "data_type": c["data_type"],
+                    "is_nullable": c["is_nullable"],
+                    "is_primary_key": c["is_primary_key"],
+                    "default_value": str(c["default_value"]) if c["default_value"] is not None else None,
+                    "ordinal_position": c["ordinal_position"],
+                    "updated_at": datetime.utcnow(),
+                    # Only overwrite description if user has NOT set a manual one
+                    "column_description": sa.case(
+                        (SchemaColumn.__table__.c.user_column_description == False,
+                         c.get("column_description")),
+                        else_=SchemaColumn.__table__.c.column_description
+                    ),
+                }
+            )
+            await db.execute(stmt)
+
+        await db.flush()
+
+        # 3. Remove schema_tables rows that no longer exist in source DB
+        #    (but keep the ones whose tables are still present)
+        synced_table_names = {t["table_name"] for t in tables}
+        stale_tables = (await db.execute(
+            select(SchemaTable).where(
+                SchemaTable.connector_id == conn_obj.id,
+                SchemaTable.table_name.notin_(synced_table_names)
+            )
+        )).scalars().all()
+        for stale in stale_tables:
+            await db.delete(stale)
+
+        # 4. Upsert Relationships (always safe to replace — no user data here)
+        await db.execute(delete(SchemaRelationship).where(SchemaRelationship.connector_id == conn_obj.id))
+        await db.flush()
+
+        rel_objs = []
+        for r in relationships:
+            obj = SchemaRelationship(
+                organization_id=conn_obj.organization_id,
+                connector_id=conn_obj.id,
+                source_table=r["source_table"],
+                source_column=r["source_column"],
+                target_table=r["target_table"],
+                target_column=r["target_column"]
+            )
+            rel_objs.append(obj)
+
+        if rel_objs:
+            db.add_all(rel_objs)
+
+        await db.commit()

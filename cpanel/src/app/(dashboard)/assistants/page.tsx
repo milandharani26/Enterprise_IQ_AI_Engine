@@ -1,0 +1,322 @@
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { Bot, Plus, Search, Filter, MoreVertical, Activity, Settings2, PlayCircle } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
+import { Textarea } from '@/components/ui/Textarea';
+import { Select } from '@/components/ui/Select';
+import { useAssistantsHooks, Assistant } from '@/hooks/api/useAssistants';
+import toast from 'react-hot-toast';
+import Link from 'next/link';
+
+const MOCK_ASSISTANTS = [
+  {
+    id: 'ast_101',
+    name: 'Customer Support Agent',
+    code: 'customer_support',
+    description: 'Handles frontline customer inquiries, processes refunds, and answers product FAQs automatically.',
+    status: 'enabled',
+    lastActive: '2 mins ago',
+    tools: 4,
+    calls: '12.4k',
+    tags: ['support', 'external', 'high-volume']
+  },
+  {
+    id: 'ast_102',
+    name: 'Sales Development Rep',
+    code: 'sdr_bot',
+    description: 'Qualifies inbound leads from the website and automatically schedules meetings in Salesforce.',
+    status: 'enabled',
+    lastActive: '15 mins ago',
+    tools: 3,
+    calls: '3.1k',
+    tags: ['sales', 'lead-gen']
+  },
+  {
+    id: 'ast_103',
+    name: 'Internal Knowledge Bot',
+    code: 'hr_wiki_bot',
+    description: 'Answers employee questions regarding HR policies, IT troubleshooting, and company benefits.',
+    status: 'disabled',
+    lastActive: '2 days ago',
+    tools: 1,
+    calls: '450',
+    tags: ['internal', 'hr']
+  },
+  {
+    id: 'ast_104',
+    name: 'Code Reviewer',
+    code: 'pr_reviewer',
+    description: 'Analyzes GitHub pull requests for security vulnerabilities and style guide violations.',
+    status: 'enabled',
+    lastActive: 'Just now',
+    tools: 2,
+    calls: '8.9k',
+    tags: ['engineering', 'ci/cd']
+  }
+];
+
+export default function AssistantsPage() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { useAssistantsQuery, useCreateAssistantMutation, useAvailableLLMsQuery } = useAssistantsHooks();
+
+  const { data: assistants = [], isLoading } = useAssistantsQuery();
+  const createMutation = useCreateAssistantMutation();
+  const { data: llmData = { providers: [] } } = useAvailableLLMsQuery();
+
+  // Form State
+  const [formData, setFormData] = useState({
+    assistant_name: '',
+    type: 'simple_reactive',
+    description: '',
+    llmProvider: '',
+    llmModel: '',
+  });
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'enabled' | 'disabled'>('all');
+
+  const filteredAssistants = assistants.filter((ast: Assistant) => {
+    const matchesSearch = ast.assistant_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ast.type?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = filterStatus === 'all' ? true : ast.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  const handleCreate = () => {
+    createMutation.mutate({
+      assistant_name: formData.assistant_name,
+      assistant_code: formData.assistant_name.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
+      type: 'simple_reactive', // Lock to simple_reactive since it's the only supported architecture
+      description: formData.description,
+      status: 'enabled',
+      tools: [{ tool_id: 'rag_search', usage_instructions: 'Always call first for document questions, lists, summaries, and explanations. Never answer document content without searching.' }],
+      system_prompt: 'You are a document assistant. Always use rag_search before answering questions about files or knowledge. List indexed documents when asked. Cite source titles. Do not invent content.',
+      llm_config: {
+        provider: formData.llmProvider,
+        model: formData.llmModel,
+      }
+    }, {
+      onSuccess: () => {
+        setIsModalOpen(false);
+        setFormData({
+          assistant_name: '',
+          type: 'simple_reactive',
+          description: '',
+          llmProvider: 'google',
+          llmModel: 'gemini-3.1-flash-lite',
+        });
+        toast.success('Assistant created successfully!');
+      },
+      onError: (error: any) => {
+        const msg = error?.response?.data?.message || 'Failed to create assistant.';
+        toast.error(msg);
+      }
+    });
+  };
+  useEffect(() => {
+    if (isModalOpen && llmData.providers.length > 0) {
+      const defaultProvider = llmData.providers[0];
+      const defaultModel = defaultProvider.models[0] || '';
+      setFormData(prev => ({
+        ...prev,
+        llmProvider: prev.llmProvider || defaultProvider.id,
+        llmModel: prev.llmModel || defaultModel
+      }));
+    }
+  }, [isModalOpen, llmData.providers]);
+
+  const providers = llmData?.providers || [];
+
+  const providerOptions = providers.map(p => ({
+    label: p.name,
+    value: p.id
+  }));
+
+  const selectedProviderData = providers.find(p => p.id === formData.llmProvider);
+  const modelOptions = selectedProviderData 
+    ? selectedProviderData.models.map(m => ({ label: m, value: m }))
+    : [];
+
+  return (
+    <div className="flex flex-col gap-8 h-full">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="m-0 text-2xl font-bold text-primary-text tracking-tight">AI Assistants</h1>
+          <p className="m-0 mt-1 text-sm text-secondary-text">Deploy and manage your autonomous agents.</p>
+        </div>
+        <Button variant="primary" data-tour="assistants-create-button" className="gap-2" onClick={() => setIsModalOpen(true)}>
+          <Plus size={18} />
+          New Assistant
+        </Button>
+      </div>
+
+      {/* Filters & Search */}
+      <div data-tour="assistants-filters" className="flex flex-col sm:flex-row items-center gap-4 bg-secondary-bg p-2 rounded-xl border border-border-color">
+        <div className="flex-1 w-full relative">
+          <Input
+            placeholder="Search assistants by name, code, or tag..."
+            icon={<Search size={18} />}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-transparent border-none shadow-none focus:ring-0"
+          />
+        </div>
+        <div className="h-8 w-px bg-border-color hidden sm:block" />
+        <div className="flex items-center gap-2 pr-2 w-full sm:w-auto">
+          <Button variant="ghost" size="sm" className="gap-2">
+            <Filter size={16} />
+            Filters
+          </Button>
+          <div className="flex bg-tertiary-bg p-1 rounded-lg">
+            <button onClick={() => setFilterStatus('all')} className={`px-3 py-1.5 text-xs font-medium transition-all rounded-md ${filterStatus === 'all' ? 'bg-card-bg shadow-sm text-primary-text' : 'text-secondary-text hover:text-primary-text'}`}>All</button>
+            <button onClick={() => setFilterStatus('enabled')} className={`px-3 py-1.5 text-xs font-medium transition-all rounded-md ${filterStatus === 'enabled' ? 'bg-card-bg shadow-sm text-primary-text' : 'text-secondary-text hover:text-primary-text'}`}>Active</button>
+            <button onClick={() => setFilterStatus('disabled')} className={`px-3 py-1.5 text-xs font-medium transition-all rounded-md ${filterStatus === 'disabled' ? 'bg-card-bg shadow-sm text-primary-text' : 'text-secondary-text hover:text-primary-text'}`}>Disabled</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Grid */}
+      {isLoading ? (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="flex flex-col bg-card-bg border border-border-color rounded-[12px] p-6 animate-brutal-pulse" style={{ animationDelay: `${i * 100}ms` }}>
+              <div className="flex justify-between items-start mb-4">
+                <div className="w-12 h-12 rounded-[8px] bg-tertiary-bg"></div>
+                <div className="w-16 h-5 rounded-[4px] bg-tertiary-bg"></div>
+              </div>
+              <div className="mb-6 flex-1">
+                <div className="w-3/4 h-5 bg-tertiary-bg rounded-[4px] mb-2"></div>
+                <div className="w-1/4 h-3 bg-tertiary-bg rounded-[4px] mb-4"></div>
+                <div className="w-full h-3 bg-tertiary-bg rounded-[4px] mb-1"></div>
+                <div className="w-5/6 h-3 bg-tertiary-bg rounded-[4px]"></div>
+              </div>
+              <div className="pt-5 border-t border-border-color">
+                <div className="w-24 h-8 bg-tertiary-bg rounded-[8px]"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div data-tour="assistants-grid" className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-6">
+          {filteredAssistants.length > 0 ? filteredAssistants.map((assistant: Assistant, idx: number) => (
+            <AssistantCard key={assistant.assistant_id || idx} assistant={assistant} index={idx} />
+          )) : (
+            <div className="col-span-full text-center text-muted-text p-10 text-[13px]">
+              No assistants found. Create one!
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Create Assistant Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Create New Assistant"
+        description="Register a new AI assistant."
+        maxWidth="max-w-[480px]"
+      >
+        <form className="flex flex-col gap-4">
+          <Input
+            label="Assistant Name"
+            placeholder="e.g. Customer Support"
+            value={formData.assistant_name}
+            onChange={(e) => setFormData({ ...formData, assistant_name: e.target.value })}
+            autoFocus
+          />
+          {providers.length === 0 ? (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-200 rounded-lg text-xs leading-relaxed border border-amber-200 dark:border-amber-900/30">
+              ⚠️ No active API key credentials found for your organization, and no system fallback key is set. Please add a <strong>Google API Key</strong> or <strong>OpenAI API Key</strong> in the Credentials section first.
+            </div>
+          ) : (
+            <>
+              <Select
+                label="LLM Provider"
+                options={providerOptions}
+                value={formData.llmProvider}
+                onChange={(e) => {
+                  const nextProvider = e.target.value;
+                  const provData = providers.find(p => p.id === nextProvider);
+                  const nextModel = provData?.models[0] || '';
+                  setFormData({ ...formData, llmProvider: nextProvider, llmModel: nextModel });
+                }}
+              />
+
+              <Select
+                label="LLM Model"
+                options={modelOptions}
+                value={formData.llmModel}
+                onChange={(e) => setFormData({ ...formData, llmModel: e.target.value })}
+              />
+            </>
+          )}
+
+          <Textarea
+            label="Description"
+            placeholder="What does this assistant do?"
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          />
+
+          <div className="flex items-center justify-end gap-3 mt-4 pt-4 border-t border-border-color">
+            <Button variant="ghost" type="button" onClick={() => setIsModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              type="button"
+              onClick={handleCreate}
+              disabled={createMutation.isPending || !formData.assistant_name || providers.length === 0}
+            >
+              {createMutation.isPending ? 'Creating...' : 'Create Assistant'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+
+
+function AssistantCard({ assistant, index }: { assistant: Assistant; index: number }) {
+  return (
+    <Link
+      href={`/assistants/detail?id=${assistant.assistant_id}`}
+      className="group relative flex flex-col bg-card-bg backdrop-blur-2xl backdrop-saturate-[180%] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-border-color rounded-[16px] p-6 transition-all duration-300 hover:border-border-hover hover:bg-card-hover hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)] hover:-translate-y-1 animate-cascade-item"
+      style={{ animationDelay: `${index * 80}ms` }}
+    >
+      {/* Top row: Icon & Status */}
+      <div className="flex justify-between items-start mb-4">
+        <div className="w-12 h-12 rounded-[12px] bg-accent-primary/10 backdrop-blur-md flex items-center justify-center text-accent-primary border border-accent-primary/20 shadow-[0_0_20px_rgba(91,106,248,0.15)] transition-all duration-300 group-hover:bg-accent-primary/20 group-hover:scale-105 group-hover:shadow-[0_0_25px_rgba(91,106,248,0.25)]">
+          <Bot size={24} />
+        </div>
+        <div className="flex items-center gap-2">
+          {assistant.status === 'enabled' ? (
+            <Badge variant="success">Active</Badge>
+          ) : (
+            <Badge variant="outline">Disabled</Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Title & Description */}
+      <div className="mb-6 flex-1">
+        <h3 className="m-0 text-[18px] font-bold text-primary-text tracking-tight group-hover:text-accent-primary transition-colors">
+          {assistant.assistant_name}
+        </h3>
+        <p className="m-0 mt-1 text-[11px] font-mono text-accent-primary/80 uppercase tracking-wider">{assistant.type}</p>
+        <p className="m-0 mt-3 text-[13px] text-secondary-text leading-[1.4] line-clamp-2">
+          {assistant.description || 'No description provided.'}
+        </p>
+      </div>
+
+
+    </Link>
+  );
+}
