@@ -70,7 +70,7 @@ class JWTService:
 
     def set_auth_cookies(self, response: __import__('fastapi').Response, access_token: str, refresh_token: str):
         """Attach access and refresh tokens to response cookies."""
-        is_secure = settings.ENV != "local"
+        is_secure = settings.ENV == "prod"
         # Access token cookie
         response.set_cookie(
             key="access_token",
@@ -93,7 +93,7 @@ class JWTService:
 
     def clear_auth_cookies(self, response: __import__('fastapi').Response):
         """Clear auth cookies on logout."""
-        is_secure = settings.ENV != "local"
+        is_secure = settings.ENV == "prod"
         response.delete_cookie("access_token", httponly=True, secure=is_secure, samesite="lax")
         response.delete_cookie("refresh_token", httponly=True, secure=is_secure, samesite="lax")
 
