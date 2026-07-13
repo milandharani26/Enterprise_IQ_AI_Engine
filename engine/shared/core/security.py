@@ -70,14 +70,14 @@ class JWTService:
 
     def set_auth_cookies(self, response: __import__('fastapi').Response, access_token: str, refresh_token: str):
         """Attach access and refresh tokens to response cookies."""
-        is_secure = settings.ENV == "prod"
         # Access token cookie
         response.set_cookie(
             key="access_token",
             value=access_token,
             httponly=True,
-            secure=is_secure,
+            secure=False,
             samesite="lax",
+            path="/",
             max_age=self.expiry * 60,  # Convert minutes to seconds
         )
         
@@ -86,16 +86,16 @@ class JWTService:
             key="refresh_token",
             value=refresh_token,
             httponly=True,
-            secure=is_secure,
+            secure=False,
             samesite="lax",
+            path="/",
             max_age=self.refresh_expiry_days * 24 * 60 * 60,  # Convert days to seconds
         )
 
     def clear_auth_cookies(self, response: __import__('fastapi').Response):
         """Clear auth cookies on logout."""
-        is_secure = settings.ENV == "prod"
-        response.delete_cookie("access_token", httponly=True, secure=is_secure, samesite="lax")
-        response.delete_cookie("refresh_token", httponly=True, secure=is_secure, samesite="lax")
+        response.delete_cookie("access_token", httponly=True, secure=False, samesite="lax", path="/")
+        response.delete_cookie("refresh_token", httponly=True, secure=False, samesite="lax", path="/")
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
