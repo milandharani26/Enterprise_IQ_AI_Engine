@@ -64,7 +64,11 @@ jobs:
             sudo docker stop enterpriseiq-ai || true
             sudo docker rm enterpriseiq-ai || true
 
-            # 5. Run the unified all-in-one container
+            # 5. Pull the latest image from registry
+            echo "Pulling latest image..."
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/enterpriseiq-ai:latest
+
+            # 6. Run the unified all-in-one container
             echo "Starting new enterpriseiq-ai container..."
             sudo docker run -d \
               --name enterpriseiq-ai \
@@ -76,6 +80,6 @@ jobs:
               -v enterpriseiq-db-data:/var/lib/postgresql \
               ${{ secrets.DOCKER_USERNAME }}/enterpriseiq-ai:latest
 
-            # 6. Verify container status
+            # 7. Verify container status
             sleep 5
             sudo docker ps | grep enterpriseiq-ai
