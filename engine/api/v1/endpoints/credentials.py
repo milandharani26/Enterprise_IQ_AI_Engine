@@ -234,6 +234,12 @@ async def generate_google_oauth_url(
     req: OAuthGenerateUrlRequest, db: AsyncSession = Depends(get_db)
 ):
     try:
+        # Strip trailing/leading spaces from input to prevent invalid_client errors
+        if req.client_id:
+            req.client_id = req.client_id.strip()
+        if req.client_secret:
+            req.client_secret = req.client_secret.strip()
+
         # Enforce API Key requirement before starting OAuth flows
         key_stmt = select(Credential).where(
             Credential.organization_id == req.organization_id,
@@ -247,7 +253,6 @@ async def generate_google_oauth_url(
                 detail="Please add a Google API Key or OpenAI API Key first before adding database or Google Drive credentials. An active API key is required to generate embeddings for data source indexing."
             )
 
-        # Create a pending credential
         new_cred = Credential(
             organization_id=req.organization_id,
             name=req.name,
